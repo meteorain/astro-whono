@@ -352,7 +352,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .admin-status[data-state='loading']::before {
+  .admin-status[data-state='loading']::after {
     animation: none;
   }
 }
@@ -374,6 +374,10 @@
 
 .admin-console--shell[data-admin-nav-visible='false']:not([data-admin-route='overview']) > .admin-shell {
   margin-top: 28px;
+}
+
+.admin-console--shell[data-admin-header-visible='false'] > .admin-shell {
+  margin-top: 0;
 }
 
 .admin-readonly-note {
@@ -1217,6 +1221,88 @@
   border-color: var(--admin-btn-tool-disabled-border, color-mix(in srgb, var(--admin-control-border) 56%, transparent));
   background: var(--admin-btn-tool-disabled-bg, transparent);
   color: var(--admin-btn-tool-disabled-color, var(--faint));
+}
+
+.admin-modal {
+  --admin-modal-width: 520px;
+  --admin-modal-max-height: calc(100vh - 36px);
+  --admin-modal-z-index: 72;
+  --admin-modal-padding: 18px;
+  --admin-modal-panel-padding-inline: 18px;
+  --admin-modal-section-padding-block: 12px;
+  --admin-modal-body-padding-block: 14px;
+
+  position: fixed;
+  inset: 0;
+  z-index: var(--admin-modal-z-index);
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  padding: var(--admin-modal-padding);
+  pointer-events: none;
+}
+
+.admin-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: color-mix(in srgb, #101418 34%, transparent);
+  cursor: default;
+  pointer-events: auto;
+}
+
+.admin-modal__panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  width: min(var(--admin-modal-width), 100%);
+  max-height: var(--admin-modal-max-height);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--admin-panel-border);
+  border-radius: var(--admin-panel-radius);
+  background: color-mix(in srgb, var(--admin-panel-bg) 96%, var(--admin-surface) 4%);
+  box-shadow: 0 28px 76px -48px var(--overlay-45);
+  pointer-events: auto;
+}
+
+.admin-modal__head,
+.admin-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.admin-modal__head {
+  min-height: 54px;
+  padding: var(--admin-modal-section-padding-block) var(--admin-modal-panel-padding-inline);
+  border-bottom: 1px solid var(--admin-row-divider);
+}
+
+.admin-modal__title {
+  margin: 0;
+  color: var(--text);
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+.admin-modal__body {
+  min-width: 0;
+  overflow: auto;
+  padding: var(--admin-modal-body-padding-block) var(--admin-modal-panel-padding-inline);
+}
+
+.admin-modal__actions {
+  min-height: 54px;
+  padding: var(--admin-modal-section-padding-block) var(--admin-modal-panel-padding-inline);
+  border-top: 1px solid var(--admin-row-divider);
 }
 
 .admin-btn--tool[data-active='true']:not(:disabled),

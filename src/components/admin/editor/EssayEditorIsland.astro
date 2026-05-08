@@ -1,0 +1,22 @@
+---
+import EditorShell from './EditorShell.svelte';
+import type { AdminEssayEditorValues } from '../../../lib/admin-console/content-shared';
+
+type Props = {
+  endpoint: string;
+  previewEndpoint: string;
+  imageUploadEndpoint: string;
+  collection: 'essay';
+  entryId: string;
+  revision: string;
+  initialFrontmatter: AdminEssayEditorValues;
+  initialBody: string;
+  initialArticleInfoOpen?: boolean;
+};
+
+const props = Astro.props;
+---
+
+<div data-admin-essay-editor-island>
+  <EditorShell client:only="svelte" {...props} />
+</div>

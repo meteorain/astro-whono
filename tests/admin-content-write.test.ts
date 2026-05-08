@@ -56,7 +56,18 @@ describe('admin content write api', () => {
     );
     await writeFile(
       path.join(tempRoot, 'src', 'content', 'memo', 'index.md'),
-      ['---', 'title: Memo', 'date: 2026-01-10', '---', '', 'memo body', ''].join('\n'),
+      [
+        '---',
+        'title: Memo',
+        'subtitle: Memo subtitle',
+        'date: 2026-01-10',
+        'draft: true',
+        'slug: memo-note',
+        '---',
+        '',
+        'memo body',
+        ''
+      ].join('\n'),
       'utf8'
     );
   });
@@ -110,10 +121,14 @@ describe('admin content write api', () => {
     const payload = await readAdminContentEntryEditorPayload('memo', 'index');
 
     expect(payload.writable).toBe(false);
-    expect(payload.readonlyReason).toContain('Phase 2B');
+    expect(payload.readonlyReason).toContain('memo 当前保持只读');
     expect(payload.collection).toBe('memo');
     if (payload.collection === 'memo') {
-      expect(payload.values.slug).toBe('');
+      expect(payload.values.title).toBe('Memo');
+      expect(payload.values.subtitle).toBe('Memo subtitle');
+      expect(payload.values.date).toBe('2026-01-10');
+      expect(payload.values.draft).toBe(true);
+      expect(payload.values.slug).toBe('memo-note');
     }
   });
 
@@ -150,6 +165,18 @@ describe('admin content write api', () => {
         status: 400,
         issuePath: 'frontmatter',
         message: 'frontmatter 必须是对象'
+      },
+      {
+        body: { collection: 'essay', entryId: 'demo', revision: 'stale', frontmatter: {}, body: 42 },
+        status: 400,
+        issuePath: 'body',
+        message: 'body 必须是 Markdown 字符串'
+      },
+      {
+        body: { collection: 'bits', entryId: 'demo', revision: 'stale', frontmatter: {}, body: 'Bits body' },
+        status: 400,
+        issuePath: 'body',
+        message: '仅 essay 支持正文写盘'
       }
     ];
 
@@ -328,6 +355,58 @@ describe('admin content write api', () => {
     );
   });
 
+  it('supports dry-run and real writes for essay body while preserving frontmatter bytes', async () => {
+    const { readAdminContentEntryEditorPayload } = await import('../src/lib/admin-console/content-shared');
+    const { splitMarkdownFrontmatter } = await import('../src/lib/admin-console/frontmatter');
+    const { POST } = await import('../src/pages/api/admin/content/entry');
+
+    const current = await readAdminContentEntryEditorPayload('essay', 'demo');
+    const nextBody = ['# Essay', '', '正文已经由后台编辑器写入。', ''].join('\n');
+
+    const dryRunResponse = await POST({
+      request: createJsonRequest('http://127.0.0.1:4321/api/admin/content/entry?dryRun=1', {
+        collection: 'essay',
+        entryId: 'demo',
+        revision: current.revision,
+        frontmatter: current.values,
+        body: nextBody
+      }),
+      url: new URL('http://127.0.0.1:4321/api/admin/content/entry?dryRun=1')
+    } as never);
+
+    expect(dryRunResponse.status).toBe(200);
+    const dryRunPayload = JSON.parse(await dryRunResponse.text());
+    expect(dryRunPayload.ok).toBe(true);
+    expect(dryRunPayload.dryRun).toBe(true);
+    expect(dryRunPayload.result.changedFields).toEqual(['body']);
+
+    const before = await readFile(path.join(tempRoot, 'src', 'content', 'essay', 'demo.md'), 'utf8');
+    const beforeSection = splitMarkdownFrontmatter(before);
+
+    const writeResponse = await POST({
+      request: createJsonRequest('http://127.0.0.1:4321/api/admin/content/entry', {
+        collection: 'essay',
+        entryId: 'demo',
+        revision: current.revision,
+        frontmatter: current.values,
+        body: nextBody
+      }),
+      url: new URL('http://127.0.0.1:4321/api/admin/content/entry')
+    } as never);
+
+    expect(writeResponse.status).toBe(200);
+    const writePayload = JSON.parse(await writeResponse.text());
+    expect(writePayload.ok).toBe(true);
+    expect(writePayload.result.written).toBe(true);
+    expect(writePayload.result.changedFields).toEqual(['body']);
+    expect(writePayload.payload.bodyText).toBe(nextBody);
+
+    const after = await readFile(path.join(tempRoot, 'src', 'content', 'essay', 'demo.md'), 'utf8');
+    const afterSection = splitMarkdownFrontmatter(after);
+    expect(afterSection.frontmatterBlock).toBe(beforeSection.frontmatterBlock);
+    expect(afterSection.bodyText).toBe(nextBody);
+  });
+
   it('returns field issues for invalid bits author avatar paths', async () => {
     const { readAdminContentEntryEditorPayload } = await import('../src/lib/admin-console/content-shared');
     const { POST } = await import('../src/pages/api/admin/content/entry');
@@ -387,6 +466,54 @@ describe('admin content write api', () => {
     expect(payload.ok).toBe(true);
     expect(payload.result.changedFields).toEqual(
       expect.arrayContaining(['author', 'images'])
+    );
+  });
+
+  it('rejects non-positive-integer bits image dimensions before writing invalid frontmatter', async () => {
+    const { readAdminContentEntryEditorPayload } = await import('../src/lib/admin-console/content-shared');
+    const { POST } = await import('../src/pages/api/admin/content/entry');
+    const current = await readAdminContentEntryEditorPayload('bits', 'demo');
+
+    const response = await POST({
+      request: createJsonRequest('http://127.0.0.1:4321/api/admin/content/entry?dryRun=1', {
+        collection: 'bits',
+        entryId: 'demo',
+        revision: current.revision,
+        frontmatter: {
+          ...current.values,
+          imagesText: JSON.stringify([
+            {
+              src: 'bits/demo.webp',
+              width: '12px',
+              height: 600
+            },
+            {
+              src: 'bits/demo.webp',
+              width: '1.5',
+              height: '10abc'
+            },
+            {
+              src: 'bits/demo.webp',
+              width: '0',
+              height: '-1'
+            }
+          ])
+        }
+      }),
+      url: new URL('http://127.0.0.1:4321/api/admin/content/entry?dryRun=1')
+    } as never);
+
+    expect(response.status).toBe(400);
+    const payload = JSON.parse(await response.text());
+    expect(payload.ok).toBe(false);
+    expect(payload.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'images[0].width' }),
+        expect.objectContaining({ path: 'images[1].width' }),
+        expect.objectContaining({ path: 'images[1].height' }),
+        expect.objectContaining({ path: 'images[2].width' }),
+        expect.objectContaining({ path: 'images[2].height' })
+      ])
     );
   });
 

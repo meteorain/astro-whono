@@ -129,6 +129,15 @@ export const assertAdminImageStaticShell = (label, body, expectedPath) => {
   ]);
 };
 
+export const assertAdminPreviewStaticShell = (label, body, expectedPath = '/api/admin/preview/') => {
+  assertAdminApiStaticShell(label, body, expectedPath, [
+    '"html"',
+    '"source"',
+    '"codeHighlight"',
+    '"elapsedMs"'
+  ]);
+};
+
 export const assertAdminSettingsStaticResponse = (label, response, expectedPath = '/api/admin/settings/') => {
   expect(
     !response.contentType.toLowerCase().includes('application/json'),
@@ -155,6 +164,14 @@ export const assertAdminImageStaticResponse = (label, response, expectedPath) =>
     `${label} unexpectedly returned JSON in production preview`
   );
   assertAdminImageStaticShell(label, response.body, expectedPath);
+};
+
+export const assertAdminPreviewStaticResponse = (label, response, expectedPath = '/api/admin/preview/') => {
+  expect(
+    !response.contentType.toLowerCase().includes('application/json'),
+    `${label} unexpectedly returned JSON in production preview`
+  );
+  assertAdminPreviewStaticShell(label, response.body, expectedPath);
 };
 
 export const waitForHttpReady = async (url, options = {}) => {

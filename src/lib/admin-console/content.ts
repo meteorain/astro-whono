@@ -4,35 +4,37 @@ import {
   getEssayDerivedText,
   getEssaySlug,
   getMemoDerivedText,
-  getPageSlice,
   getPublished,
   getSortedEssays,
-  getTotalPages,
   type EssayEntry
 } from '../content';
 import {
   getBitAnchorId,
+  getBitsPagePath,
   getBitSlug,
   getBitsDerivedText,
-  getBitsSearchIndex,
   getSortedBits,
   type BitsEntry
 } from '../bits';
+import { getTagKeys, isRoutableTagKey, normalizeTagLabel, toTagKey } from '../tags';
+import { listAdminCollectionSourceFiles } from './content-shared';
 import { truncateText } from '../../utils/excerpt';
 import {
   buildSearchHaystack,
-  formatDateTime,
+  formatISODate,
   formatISODateUtc,
   tokenizeSearchQuery
 } from '../../utils/format';
 
 export type MemoEntry = CollectionEntry<'memo'>;
 export type AdminContentCollectionKey = 'essay' | 'bits' | 'memo';
+export type AdminContentScopeKey = 'all' | AdminContentCollectionKey;
 export type AdminContentDraftFilter = 'all' | 'draft' | 'published';
 export type AdminContentSortKey = 'recent' | 'title';
-export type AdminContentField = {
-  label: string;
-  value: string;
+type AdminContentCollectionCountMap = Record<AdminContentCollectionKey, number>;
+
+type CreateAdminContentIndexItemOptions = {
+  includeSearchText: boolean;
 };
 
 export type AdminContentIndexItem = {
@@ -43,24 +45,13 @@ export type AdminContentIndexItem = {
   slug: string | null;
   relativePath: string;
   publicHref: string | null;
-  excerpt: string | null;
   isDraft: boolean;
   archive: boolean | null;
   date: Date | null;
   dateLabel: string;
-  dateValue: string | null;
   year: number | null;
   tags: string[];
-  frontmatterFields: AdminContentField[];
   searchHaystack: string;
-};
-
-export type AdminContentCollectionSummary = {
-  key: AdminContentCollectionKey;
-  label: string;
-  totalCount: number;
-  draftCount: number;
-  latestDateLabel: string;
 };
 
 export type AdminContentFilterOption = {
@@ -69,40 +60,52 @@ export type AdminContentFilterOption = {
   count: number;
 };
 
+export type AdminContentScopeOption = {
+  value: AdminContentScopeKey;
+  label: string;
+  count: number;
+};
+
+export type AdminContentCollectionSection = {
+  collection: AdminContentCollectionKey;
+  collectionLabel: string;
+  totalCount: number;
+  filteredCount: number;
+  items: AdminContentIndexItem[];
+};
+
 export type AdminContentFilterState = {
+  collection: AdminContentScopeKey;
   query: string;
   queryTokens: string[];
   draft: AdminContentDraftFilter;
   tag: string;
   year: number | null;
-  page: number;
-  entry: string;
   sort: AdminContentSortKey;
 };
 
-export type AdminContentCollectionPageData = {
-  collection: AdminContentCollectionKey;
+export type AdminContentConsolePageData = {
+  collection: AdminContentScopeKey;
   collectionLabel: string;
-  collectionHref: string;
-  pageSize: number;
   totalCount: number;
   filteredCount: number;
-  totalPages: number;
-  currentPage: number;
   items: AdminContentIndexItem[];
-  pageItems: AdminContentIndexItem[];
-  selectedEntry: AdminContentIndexItem | null;
+  sections: AdminContentCollectionSection[];
+  collectionOptions: AdminContentScopeOption[];
   tagOptions: AdminContentFilterOption[];
   yearOptions: AdminContentFilterOption[];
   filterState: AdminContentFilterState;
   hasActiveFilters: boolean;
 };
 
-export type AdminContentOverviewData = {
-  summaries: AdminContentCollectionSummary[];
-};
-
 export const ADMIN_CONTENT_COLLECTIONS = ['essay', 'bits', 'memo'] as const satisfies readonly AdminContentCollectionKey[];
+
+export const ADMIN_CONTENT_SCOPE_OPTIONS = [
+  { value: 'all', label: '全部内容' },
+  { value: 'essay', label: '随笔' },
+  { value: 'bits', label: '絮语' },
+  { value: 'memo', label: '小记' }
+] as const satisfies readonly { value: AdminContentScopeKey; label: string }[];
 
 export const ADMIN_CONTENT_SORT_OPTIONS = [
   { value: 'recent', label: '最近更新' },
@@ -121,20 +124,23 @@ const COLLECTION_LABELS: Record<AdminContentCollectionKey, string> = {
   memo: '小记'
 };
 
-const ADMIN_CONTENT_PAGE_SIZES: Record<AdminContentCollectionKey, number> = {
-  essay: 12,
-  bits: 18,
-  memo: 12
-};
-
-const EMPTY_VALUE = '(空)';
 const MISSING_VALUE = '(未设置)';
+const TAG_LABEL_COLLATOR = new Intl.Collator('zh-CN', {
+  sensitivity: 'variant',
+  numeric: true
+});
+const COLLECTION_ORDER = new Map<AdminContentCollectionKey, number>(
+  ADMIN_CONTENT_COLLECTIONS.map((collection, index) => [collection, index])
+);
 
 const isAdminContentDraftFilter = (value: string): value is AdminContentDraftFilter =>
   ADMIN_CONTENT_DRAFT_OPTIONS.some((option) => option.value === value);
 
 const isAdminContentSortKey = (value: string): value is AdminContentSortKey =>
   ADMIN_CONTENT_SORT_OPTIONS.some((option) => option.value === value);
+
+const isAdminContentScopeKey = (value: string): value is AdminContentScopeKey =>
+  value === 'all' || ADMIN_CONTENT_COLLECTIONS.includes(value as AdminContentCollectionKey);
 
 const normalizePositiveInteger = (value: string | null): number | null => {
   if (!value) return null;
@@ -144,6 +150,11 @@ const normalizePositiveInteger = (value: string | null): number | null => {
 
 const normalizeOptionalText = (value: string | null | undefined): string =>
   typeof value === 'string' ? value.trim() : '';
+
+const normalizeAdminContentTagFilter = (value: string | null): string => {
+  const key = toTagKey(normalizeOptionalText(value));
+  return isRoutableTagKey(key) ? key : '';
+};
 
 const normalizeFieldValue = (value: string | null | undefined, emptyValue = MISSING_VALUE): string => {
   const normalized = normalizeOptionalText(value);
@@ -170,7 +181,7 @@ const formatNullableDate = (date: Date | null): { label: string; value: string |
   }
 
   return {
-    label: formatDateTime(date),
+    label: formatISODate(date),
     value: formatISODateUtc(date),
     year: date.getUTCFullYear()
   };
@@ -179,30 +190,11 @@ const formatNullableDate = (date: Date | null): { label: string; value: string |
 const buildRelativePath = (collection: AdminContentCollectionKey, entryId: string): string =>
   `src/content/${collection}/${entryId}`;
 
-const buildEntryField = (label: string, value: string | null | undefined, emptyValue?: string): AdminContentField => ({
-  label,
-  value: normalizeFieldValue(value, emptyValue)
-});
-
-const buildTagOptions = (items: readonly AdminContentIndexItem[]): AdminContentFilterOption[] => {
-  const counts = new Map<string, number>();
-  for (const item of items) {
-    for (const tag of item.tags) {
-      counts.set(tag, (counts.get(tag) ?? 0) + 1);
-    }
-  }
-
-  return Array.from(counts.entries())
-    .sort((left, right) => {
-      if (right[1] !== left[1]) return right[1] - left[1];
-      return left[0].localeCompare(right[0], 'zh-Hans-CN');
-    })
-    .map(([value, count]) => ({
-      value,
-      label: value,
-      count
-    }));
-};
+const encodeEntryIdPath = (entryId: string): string =>
+  entryId
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
 
 const buildYearOptions = (items: readonly AdminContentIndexItem[]): AdminContentFilterOption[] => {
   const counts = new Map<number, number>();
@@ -220,19 +212,95 @@ const buildYearOptions = (items: readonly AdminContentIndexItem[]): AdminContent
     }));
 };
 
-const loadPublishedBitsHrefMap = async (): Promise<Map<string, string>> => {
-  const index = await getBitsSearchIndex(PAGE_SIZE_BITS);
-  return new Map(index.map((item) => [item.key, item.href]));
+const compareTagLabel = (left: string, right: string): number =>
+  TAG_LABEL_COLLATOR.compare(left, right);
+
+const buildTagOptions = (
+  items: readonly AdminContentIndexItem[],
+  selectedTag: string
+): AdminContentFilterOption[] => {
+  const summaries = new Map<string, { label: string; count: number }>();
+
+  for (const item of items) {
+    const seenInItem = new Set<string>();
+
+    for (const rawTag of item.tags) {
+      const label = normalizeTagLabel(rawTag);
+      if (!label) continue;
+
+      const key = toTagKey(label);
+      if (!isRoutableTagKey(key) || seenInItem.has(key)) continue;
+
+      const current = summaries.get(key);
+      if (current) {
+        current.count += 1;
+        if (compareTagLabel(label, current.label) < 0) current.label = label;
+      } else {
+        summaries.set(key, {
+          label,
+          count: 1
+        });
+      }
+
+      seenInItem.add(key);
+    }
+  }
+
+  if (selectedTag && !summaries.has(selectedTag)) {
+    summaries.set(selectedTag, {
+      label: selectedTag,
+      count: 0
+    });
+  }
+
+  return Array.from(summaries.entries())
+    .map(([value, summary]) => ({
+      value,
+      label: summary.label,
+      count: summary.count
+    }))
+    .sort((left, right) => {
+      if (right.count !== left.count) return right.count - left.count;
+      return compareTagLabel(left.label, right.label);
+    });
 };
 
-const createEssayIndexItem = (entry: EssayEntry): AdminContentIndexItem => {
-  const derivedText = getEssayDerivedText(entry);
+const getContentCollectionTotalCount = (collectionCounts: AdminContentCollectionCountMap): number =>
+  ADMIN_CONTENT_COLLECTIONS.reduce((total, collection) => total + collectionCounts[collection], 0);
+
+const buildCollectionOptions = (collectionCounts: AdminContentCollectionCountMap): AdminContentScopeOption[] => {
+  const totalCount = getContentCollectionTotalCount(collectionCounts);
+  return ADMIN_CONTENT_SCOPE_OPTIONS.map((option) => ({
+    value: option.value,
+    label: option.label,
+    count: option.value === 'all'
+      ? totalCount
+      : collectionCounts[option.value]
+  }));
+};
+
+const buildBitsHrefMap = (entries: readonly BitsEntry[]): Map<string, string> => {
+  const hrefById = new Map<string, string>();
+  const publishedEntries = entries.filter((entry) => entry.data.draft !== true);
+
+  publishedEntries.forEach((entry, index) => {
+    const page = Math.floor(index / PAGE_SIZE_BITS) + 1;
+    hrefById.set(entry.id, `${getBitsPagePath(page)}#${getBitAnchorId(entry.id)}`);
+  });
+
+  return hrefById;
+};
+
+const createEssayIndexItem = (
+  entry: EssayEntry,
+  options: CreateAdminContentIndexItemOptions
+): AdminContentIndexItem => {
+  const derivedText = options.includeSearchText ? getEssayDerivedText(entry) : null;
   const title = normalizeFieldValue(entry.data.title, entry.id);
-  const { label, value, year } = formatNullableDate(entry.data.date);
+  const { label, year } = formatNullableDate(entry.data.date);
   const slug = getEssaySlug(entry);
   const relativePath = buildRelativePath('essay', entry.id);
   const publicHref = entry.data.draft === true ? null : `/archive/${slug}/`;
-  const excerpt = derivedText.excerpt || null;
 
   return {
     collection: 'essay',
@@ -242,51 +310,40 @@ const createEssayIndexItem = (entry: EssayEntry): AdminContentIndexItem => {
     slug,
     relativePath,
     publicHref,
-    excerpt,
     isDraft: entry.data.draft === true,
     archive: entry.data.archive !== false,
     date: entry.data.date,
     dateLabel: label,
-    dateValue: value,
     year,
     tags: entry.data.tags.slice(),
-    frontmatterFields: [
-      buildEntryField('title', entry.data.title, entry.id),
-      buildEntryField('description', entry.data.description, EMPTY_VALUE),
-      buildEntryField('date', value, '未设置日期'),
-      buildEntryField('tags', entry.data.tags.join(', '), EMPTY_VALUE),
-      buildEntryField('draft', String(entry.data.draft === true)),
-      buildEntryField('archive', String(entry.data.archive !== false)),
-      buildEntryField('slug', slug),
-      buildEntryField('cover', entry.data.cover),
-      buildEntryField('badge', entry.data.badge)
-    ],
     searchHaystack: buildSearchHaystack([
       title,
       entry.id,
       slug,
       entry.data.description,
       entry.data.tags,
-      derivedText.text
+      derivedText?.text
     ])
   };
 };
 
 const createBitsIndexItem = (
   entry: BitsEntry,
-  publicHrefById: ReadonlyMap<string, string>
+  publicHrefById: ReadonlyMap<string, string>,
+  options: CreateAdminContentIndexItemOptions
 ): AdminContentIndexItem => {
-  const derivedText = getBitsDerivedText(entry);
-  const fallbackTitle = truncateText(derivedText.excerpt || derivedText.plainText, 48) || entry.id;
+  const shouldLoadDerivedText = options.includeSearchText || normalizeOptionalText(entry.data.title).length === 0;
+  const derivedText = shouldLoadDerivedText ? getBitsDerivedText(entry) : null;
+  const fallbackTitle = derivedText
+    ? truncateText(derivedText.excerpt || derivedText.plainText, 48) || entry.id
+    : entry.id;
   const title = normalizeFieldValue(entry.data.title, fallbackTitle);
-  const { label, value, year } = formatNullableDate(entry.data.date);
+  const { label, year } = formatNullableDate(entry.data.date);
   const slug = getBitSlug(entry);
   const relativePath = buildRelativePath('bits', entry.id);
   const publicHref = entry.data.draft === true ? null : publicHrefById.get(entry.id) ?? null;
   const authorName = normalizeOptionalText(entry.data.author?.name);
   const authorAvatar = normalizeOptionalText(entry.data.author?.avatar);
-  const imageCount = entry.data.images?.length ?? 0;
-  const excerpt = derivedText.excerpt || null;
 
   return {
     collection: 'bits',
@@ -296,25 +353,12 @@ const createBitsIndexItem = (
     slug,
     relativePath,
     publicHref,
-    excerpt,
     isDraft: entry.data.draft === true,
     archive: null,
     date: entry.data.date,
     dateLabel: label,
-    dateValue: value,
     year,
     tags: entry.data.tags.slice(),
-    frontmatterFields: [
-      buildEntryField('title', entry.data.title, fallbackTitle),
-      buildEntryField('description', entry.data.description, EMPTY_VALUE),
-      buildEntryField('date', value, '未设置日期'),
-      buildEntryField('tags', entry.data.tags.join(', '), EMPTY_VALUE),
-      buildEntryField('draft', String(entry.data.draft === true)),
-      buildEntryField('slug', slug),
-      buildEntryField('author.name', authorName, MISSING_VALUE),
-      buildEntryField('author.avatar', authorAvatar, MISSING_VALUE),
-      buildEntryField('images', imageCount > 0 ? `${imageCount} 项` : EMPTY_VALUE)
-    ],
     searchHaystack: buildSearchHaystack([
       title,
       entry.id,
@@ -323,16 +367,18 @@ const createBitsIndexItem = (
       entry.data.tags,
       authorName,
       authorAvatar,
-      derivedText.text
+      options.includeSearchText ? derivedText?.text : undefined
     ])
   };
 };
 
-const createMemoIndexItem = (entry: MemoEntry): AdminContentIndexItem => {
-  const derivedText = getMemoDerivedText(entry);
-  const excerpt = truncateText(derivedText.excerptText, 160) || null;
+const createMemoIndexItem = (
+  entry: MemoEntry,
+  options: CreateAdminContentIndexItemOptions
+): AdminContentIndexItem => {
+  const derivedText = options.includeSearchText ? getMemoDerivedText(entry) : null;
   const title = normalizeFieldValue(entry.data.title, entry.id);
-  const { label, value, year } = formatNullableDate(entry.data.date ?? null);
+  const { label, year } = formatNullableDate(entry.data.date ?? null);
   const slug = normalizeOptionalText(entry.data.slug) || null;
   const relativePath = buildRelativePath('memo', entry.id);
   const publicHref = entry.data.draft === true ? null : '/memo/';
@@ -346,116 +392,106 @@ const createMemoIndexItem = (entry: MemoEntry): AdminContentIndexItem => {
     slug,
     relativePath,
     publicHref,
-    excerpt,
     isDraft: entry.data.draft === true,
     archive: null,
     date: entry.data.date ?? null,
     dateLabel: label,
-    dateValue: value,
     year,
     tags: [],
-    frontmatterFields: [
-      buildEntryField('title', entry.data.title, entry.id),
-      buildEntryField('subtitle', subtitle, EMPTY_VALUE),
-      buildEntryField('date', value, '未设置日期'),
-      buildEntryField('draft', String(entry.data.draft === true)),
-      buildEntryField('slug', slug, MISSING_VALUE),
-      buildEntryField('public route', '/memo/')
-    ],
     searchHaystack: buildSearchHaystack([
       title,
       entry.id,
       slug,
       subtitle,
-      derivedText.plainText
+      derivedText?.plainText
     ])
   };
 };
 
-const loadCollectionItems = async (collection: AdminContentCollectionKey): Promise<AdminContentIndexItem[]> => {
+const loadCollectionItems = async (
+  collection: AdminContentCollectionKey,
+  options: CreateAdminContentIndexItemOptions
+): Promise<AdminContentIndexItem[]> => {
   switch (collection) {
     case 'essay':
-      return (await getSortedEssays({ includeDraft: true })).map((entry) => createEssayIndexItem(entry));
+      return (await getSortedEssays({ includeDraft: true })).map((entry) => createEssayIndexItem(entry, options));
     case 'bits': {
-      const [entries, publicHrefById] = await Promise.all([
-        getSortedBits({ includeDraft: true }),
-        loadPublishedBitsHrefMap()
-      ]);
-      return entries.map((entry) => createBitsIndexItem(entry, publicHrefById));
+      const entries = await getSortedBits({ includeDraft: true });
+      const publicHrefById = buildBitsHrefMap(entries);
+      return entries.map((entry) => createBitsIndexItem(entry, publicHrefById, options));
     }
     case 'memo':
       return (await getPublished('memo', { includeDraft: true, orderBy: orderByMemoDate }))
-        .map((entry) => createMemoIndexItem(entry));
+        .map((entry) => createMemoIndexItem(entry, options));
     default:
       throw new Error(`Unsupported admin content collection: ${String(collection)}`);
   }
 };
 
-const loadCollectionSummary = async (
-  collection: AdminContentCollectionKey
-): Promise<AdminContentCollectionSummary> => {
-  switch (collection) {
-    case 'essay': {
-      const entries = await getSortedEssays({ includeDraft: true });
-      const latestDate = entries.find((entry) => entry.data.date !== null)?.data.date ?? null;
-
-      return {
-        key: collection,
-        label: COLLECTION_LABELS[collection],
-        totalCount: entries.length,
-        draftCount: entries.filter((entry) => entry.data.draft === true).length,
-        latestDateLabel: latestDate ? formatDateTime(latestDate) : '未设置日期'
-      };
-    }
-    case 'bits': {
-      const entries = await getSortedBits({ includeDraft: true });
-      const latestDate = entries.find((entry) => entry.data.date !== null)?.data.date ?? null;
-
-      return {
-        key: collection,
-        label: COLLECTION_LABELS[collection],
-        totalCount: entries.length,
-        draftCount: entries.filter((entry) => entry.data.draft === true).length,
-        latestDateLabel: latestDate ? formatDateTime(latestDate) : '未设置日期'
-      };
-    }
-    case 'memo': {
-      const entries = await getPublished('memo', { includeDraft: true, orderBy: orderByMemoDate });
-      const latestDate = entries.find((entry) => entry.data.date !== null)?.data.date ?? null;
-
-      return {
-        key: collection,
-        label: COLLECTION_LABELS[collection],
-        totalCount: entries.length,
-        draftCount: entries.filter((entry) => entry.data.draft === true).length,
-        latestDateLabel: latestDate ? formatDateTime(latestDate) : '未设置日期'
-      };
-    }
-    default:
-      throw new Error(`Unsupported admin content collection summary: ${String(collection)}`);
-  }
+const loadContentIndexItems = async (
+  collections: readonly AdminContentCollectionKey[],
+  options: CreateAdminContentIndexItemOptions
+): Promise<AdminContentIndexItem[]> => {
+  const collectionItems = await Promise.all(collections.map((collection) => loadCollectionItems(collection, options)));
+  return collectionItems.flat();
 };
+
+const loadContentCollectionCounts = async (): Promise<AdminContentCollectionCountMap> => {
+  const entries = await Promise.all(
+    ADMIN_CONTENT_COLLECTIONS.map(async (collection) => {
+      const files = await listAdminCollectionSourceFiles(collection);
+      return [collection, files.length] as const;
+    })
+  );
+
+  return Object.fromEntries(entries) as AdminContentCollectionCountMap;
+};
+
+const getAdminContentScopeLabel = (collection: AdminContentScopeKey): string =>
+  collection === 'all' ? '全部内容' : COLLECTION_LABELS[collection];
+
+const getAdminContentVisibleCollections = (collection: AdminContentScopeKey): readonly AdminContentCollectionKey[] =>
+  collection === 'all' ? ADMIN_CONTENT_COLLECTIONS : [collection];
+
+const orderAdminContentItemsByRecent = (items: readonly AdminContentIndexItem[]): AdminContentIndexItem[] =>
+  items.slice().sort((left, right) => {
+    const dateOrder = orderByNullableDateDesc(left.date, right.date);
+    if (dateOrder !== 0) return dateOrder;
+    const collectionOrder = (COLLECTION_ORDER.get(left.collection) ?? 0) - (COLLECTION_ORDER.get(right.collection) ?? 0);
+    if (collectionOrder !== 0) return collectionOrder;
+    return left.id.localeCompare(right.id, 'en');
+  });
 
 export const isAdminContentCollectionKey = (value: string): value is AdminContentCollectionKey =>
   ADMIN_CONTENT_COLLECTIONS.includes(value as AdminContentCollectionKey);
 
-export const getAdminContentCollectionHref = (collection: AdminContentCollectionKey): `/admin/content/${AdminContentCollectionKey}/` =>
-  `/admin/content/${collection}/`;
+export const getAdminContentEntryEditHref = (
+  collection: AdminContentCollectionKey,
+  entryId: string
+): string =>
+  `/admin/content/${collection}/_edit/${encodeEntryIdPath(entryId)}/`;
+
+export const getAdminContentEntryListHref = (collection: AdminContentCollectionKey): string => {
+  const params = new URLSearchParams({
+    collection
+  });
+  return `/admin/content/?${params.toString()}`;
+};
 
 export const getAdminContentFilterState = (searchParams: URLSearchParams): AdminContentFilterState => {
+  const collectionValue = normalizeOptionalText(searchParams.get('collection'));
   const query = normalizeOptionalText(searchParams.get('q'));
   const draftValue = normalizeOptionalText(searchParams.get('draft'));
   const sortValue = normalizeOptionalText(searchParams.get('sort'));
   const year = normalizePositiveInteger(searchParams.get('year'));
 
   return {
+    collection: isAdminContentScopeKey(collectionValue) ? collectionValue : 'all',
     query,
     queryTokens: tokenizeSearchQuery(query),
     draft: isAdminContentDraftFilter(draftValue) ? draftValue : 'all',
-    tag: normalizeOptionalText(searchParams.get('tag')),
+    tag: normalizeAdminContentTagFilter(searchParams.get('tag')),
     year,
-    page: normalizePositiveInteger(searchParams.get('page')) ?? 1,
-    entry: normalizeOptionalText(searchParams.get('entry')),
     sort: isAdminContentSortKey(sortValue) ? sortValue : 'recent'
   };
 };
@@ -464,13 +500,14 @@ export const filterAdminContentItems = (
   items: readonly AdminContentIndexItem[],
   filterState: AdminContentFilterState
 ): AdminContentIndexItem[] => {
-  const tagLower = filterState.tag.toLowerCase();
+  const tagKey = normalizeAdminContentTagFilter(filterState.tag);
   const queryTokens = filterState.queryTokens;
 
   const filteredItems = items.filter((item) => {
+    if (filterState.collection !== 'all' && item.collection !== filterState.collection) return false;
     if (filterState.draft === 'draft' && !item.isDraft) return false;
     if (filterState.draft === 'published' && item.isDraft) return false;
-    if (tagLower && !item.tags.some((tag) => tag.toLowerCase() === tagLower)) return false;
+    if (tagKey && !getTagKeys(item.tags).includes(tagKey)) return false;
     if (filterState.year !== null && item.year !== filterState.year) return false;
     if (queryTokens.length > 0 && !queryTokens.every((token) => item.searchHaystack.includes(token))) return false;
     return true;
@@ -484,51 +521,60 @@ export const filterAdminContentItems = (
     });
   }
 
-  return filteredItems;
+  return orderAdminContentItemsByRecent(filteredItems);
 };
 
-export const getAdminContentCollectionPageData = async (
-  collection: AdminContentCollectionKey,
+const buildAdminContentCollectionSections = (
+  collectionCounts: AdminContentCollectionCountMap,
+  filteredItems: readonly AdminContentIndexItem[],
+  collection: AdminContentScopeKey
+): AdminContentCollectionSection[] => {
+  const visibleCollections = getAdminContentVisibleCollections(collection);
+
+  return visibleCollections.map((sectionCollection) => {
+    const sectionItems = filteredItems.filter((item) => item.collection === sectionCollection);
+    const totalCount = collectionCounts[sectionCollection];
+
+    return {
+      collection: sectionCollection,
+      collectionLabel: COLLECTION_LABELS[sectionCollection],
+      totalCount,
+      filteredCount: sectionItems.length,
+      items: sectionItems
+    };
+  });
+};
+
+export const getAdminContentConsolePageData = async (
   searchParams: URLSearchParams
-): Promise<AdminContentCollectionPageData> => {
-  const items = await loadCollectionItems(collection);
+): Promise<AdminContentConsolePageData> => {
   const filterState = getAdminContentFilterState(searchParams);
+  const visibleCollections = getAdminContentVisibleCollections(filterState.collection);
+  const includeSearchText = filterState.queryTokens.length > 0;
+  const [collectionCounts, items] = await Promise.all([
+    loadContentCollectionCounts(),
+    loadContentIndexItems(visibleCollections, { includeSearchText })
+  ]);
   const filteredItems = filterAdminContentItems(items, filterState);
-  const pageSize = ADMIN_CONTENT_PAGE_SIZES[collection];
-  const totalPages = Math.max(getTotalPages(filteredItems.length, pageSize), 1);
-  const currentPage = Math.min(filterState.page, totalPages);
-  const pageItems = getPageSlice(filteredItems, currentPage, pageSize);
-  const selectedEntry = pageItems.find((item) => item.id === filterState.entry) ?? pageItems[0] ?? null;
 
   return {
-    collection,
-    collectionLabel: COLLECTION_LABELS[collection],
-    collectionHref: getAdminContentCollectionHref(collection),
-    pageSize,
-    totalCount: items.length,
+    collection: filterState.collection,
+    collectionLabel: getAdminContentScopeLabel(filterState.collection),
+    totalCount: getContentCollectionTotalCount(collectionCounts),
     filteredCount: filteredItems.length,
-    totalPages,
-    currentPage,
     items,
-    pageItems,
-    selectedEntry,
-    tagOptions: buildTagOptions(items),
+    sections: buildAdminContentCollectionSections(collectionCounts, filteredItems, filterState.collection),
+    collectionOptions: buildCollectionOptions(collectionCounts),
+    tagOptions: buildTagOptions(items, filterState.tag),
     yearOptions: buildYearOptions(items),
     filterState,
     hasActiveFilters:
-      filterState.query.length > 0
+      filterState.collection !== 'all'
+      || filterState.query.length > 0
       || filterState.draft !== 'all'
       || filterState.tag.length > 0
       || filterState.year !== null
       || filterState.sort !== 'recent'
-  };
-};
-
-export const getAdminContentOverviewData = async (): Promise<AdminContentOverviewData> => {
-  const summaries = await Promise.all(ADMIN_CONTENT_COLLECTIONS.map((collection) => loadCollectionSummary(collection)));
-
-  return {
-    summaries
   };
 };
 

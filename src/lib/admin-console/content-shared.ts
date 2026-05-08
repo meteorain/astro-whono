@@ -16,6 +16,7 @@ import {
 import {
   parseMarkdownFrontmatterDocument,
   patchMarkdownFrontmatter,
+  replaceMarkdownBody,
   type FrontmatterPatch,
   splitMarkdownFrontmatter
 } from './frontmatter';
@@ -93,6 +94,7 @@ export type AdminEssayEditorPayload = {
   relativePath: string;
   writable: true;
   readonlyReason: null;
+  bodyText: string;
   values: AdminEssayEditorValues;
 };
 
@@ -161,6 +163,7 @@ type AdminContentSourceState = {
   relativePath: string;
   revision: string;
   sourceText: string;
+  bodyText: string;
   frontmatterDocument: ReturnType<typeof parseMarkdownFrontmatterDocument>;
   rawFrontmatter: Record<string, unknown>;
 };
@@ -169,6 +172,7 @@ type AdminWritePlan = {
   issues: AdminContentValidationIssue[];
   changedFields: string[];
   patches: FrontmatterPatch[];
+  bodyText?: string;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -203,7 +207,7 @@ const normalizeEntryId = (entryId: string): string => {
   return normalized;
 };
 
-const resolveAdminContentEntrySourcePath = (
+export const resolveAdminContentEntrySourcePath = (
   collection: AdminContentCollectionKey,
   entryId: string
 ): string => {
@@ -266,6 +270,32 @@ const parseTagsText = (value: string): string[] =>
     .split(/\r?\n/)
     .map((item) => item.trim())
     .filter(Boolean);
+
+const POSITIVE_INTEGER_PATTERN = /^[1-9]\d*$/;
+
+const parseOptionalPositiveInteger = (value: unknown): number | undefined => {
+  if (value == null) {
+    return undefined;
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  if (typeof value !== 'string') {
+    return Number.NaN;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  return POSITIVE_INTEGER_PATTERN.test(trimmed) ? Number(trimmed) : Number.NaN;
+};
+
+const isPositiveInteger = (value: number | undefined): boolean =>
+  value === undefined || (Number.isInteger(value) && value > 0);
 
 const parseAdminEssayEditorInput = (
   input: unknown
@@ -447,6 +477,7 @@ const loadAdminContentSourceState = async (
     relativePath: toRelativeProjectPath(sourcePath),
     revision: hashSourceText(sourceText),
     sourceText,
+    bodyText: section.bodyText,
     frontmatterDocument,
     rawFrontmatter: isRecord(rawFrontmatter) ? rawFrontmatter : {}
   };
@@ -501,7 +532,7 @@ const toMemoEditorValues = (state: AdminContentSourceState): AdminMemoEditorValu
 
 export const getAdminContentReadOnlyReason = (collection: AdminContentCollectionKey): string | null =>
   collection === 'memo'
-    ? 'Phase 2B 首批仅开放 essay / bits frontmatter 写回；memo 仍保持只读，并单独保留 date 可选 / slug 不走 slugRule 的 schema 差异。'
+    ? 'memo 当前保持只读；仅 essay / bits 支持内容写回。memo.date 可选，memo.slug 使用普通字符串，不复用 essay 的 slugRule。'
     : null;
 
 export const readAdminContentEntryEditorPayload = async (
@@ -518,6 +549,7 @@ export const readAdminContentEntryEditorPayload = async (
       relativePath: state.relativePath,
       writable: true,
       readonlyReason: null,
+      bodyText: state.bodyText,
       values: toEssayEditorValues(state)
     };
   }
@@ -630,23 +662,22 @@ const parseBitsImages = (value: string): { images?: AdminBitsImage[]; issues: Ad
       issues.push(createIssue(`images[${index}].src`, `images[${index}].src 只允许 https:// 远程路径或仓库内相对图片路径`));
     }
 
-    const width = item.width == null || item.width === ''
-      ? undefined
-      : (typeof item.width === 'number' ? item.width : Number.parseInt(String(item.width), 10));
-    const height = item.height == null || item.height === ''
-      ? undefined
-      : (typeof item.height === 'number' ? item.height : Number.parseInt(String(item.height), 10));
-    if (width !== undefined && (!Number.isInteger(width) || width <= 0)) {
+    const width = parseOptionalPositiveInteger(item.width);
+    const height = parseOptionalPositiveInteger(item.height);
+    const hasInvalidWidth = !isPositiveInteger(width);
+    const hasInvalidHeight = !isPositiveInteger(height);
+
+    if (hasInvalidWidth) {
       issues.push(createIssue(`images[${index}].width`, `images[${index}].width 必须是正整数`));
     }
-    if (height !== undefined && (!Number.isInteger(height) || height <= 0)) {
+    if (hasInvalidHeight) {
       issues.push(createIssue(`images[${index}].height`, `images[${index}].height 必须是正整数`));
     }
 
     if (
       !normalizedSrc ||
-      (width !== undefined && (!Number.isInteger(width) || width <= 0)) ||
-      (height !== undefined && (!Number.isInteger(height) || height <= 0))
+      hasInvalidWidth ||
+      hasInvalidHeight
     ) {
       return;
     }
@@ -738,7 +769,8 @@ const isEqualJsonValue = (left: unknown, right: unknown): boolean =>
 
 const buildEssayWritePlan = async (
   state: AdminContentSourceState,
-  values: AdminEssayEditorValues
+  values: AdminEssayEditorValues,
+  bodyInput?: string
 ): Promise<AdminWritePlan> => {
   const next = buildEssayFrontmatterFromValues(values);
   if (!next.frontmatter) {
@@ -784,7 +816,16 @@ const buildEssayWritePlan = async (
     );
   }
 
-  return { issues: [], changedFields, patches };
+  if (bodyInput !== undefined && bodyInput !== state.bodyText) {
+    changedFields.push('body');
+  }
+
+  return {
+    issues: [],
+    changedFields,
+    patches,
+    ...(bodyInput !== undefined ? { bodyText: bodyInput } : {})
+  };
 };
 
 const buildBitsWritePlan = (state: AdminContentSourceState, values: AdminBitsEditorValues): AdminWritePlan => {
@@ -828,7 +869,8 @@ const buildBitsWritePlan = (state: AdminContentSourceState, values: AdminBitsEdi
 export const buildAdminContentWritePlan = async (
   collection: AdminContentCollectionKey,
   entryId: string,
-  frontmatterInput: unknown
+  frontmatterInput: unknown,
+  bodyInput?: string
 ): Promise<AdminWritePlan & { state: AdminContentSourceState }> => {
   const state = await loadAdminContentSourceState(collection, entryId);
 
@@ -845,7 +887,7 @@ export const buildAdminContentWritePlan = async (
 
     return {
       state,
-      ...(await buildEssayWritePlan(state, parsed.values))
+      ...(await buildEssayWritePlan(state, parsed.values, bodyInput))
     };
   }
 
@@ -871,7 +913,7 @@ export const buildAdminContentWritePlan = async (
     issues: [
       createIssue(
         'collection',
-        'Phase 2B 首批仅开放 essay / bits frontmatter 写回；memo 仍保持只读。'
+        '当前仅支持 essay / bits 内容写回；memo 保持只读。'
       )
     ],
     changedFields: [],
@@ -881,5 +923,9 @@ export const buildAdminContentWritePlan = async (
 
 export const applyAdminContentWritePlan = (
   state: Pick<AdminContentSourceState, 'sourceText'>,
-  patches: readonly FrontmatterPatch[]
-): string => patchMarkdownFrontmatter(state.sourceText, patches);
+  patches: readonly FrontmatterPatch[],
+  bodyText?: string
+): string => {
+  const nextSourceText = patchMarkdownFrontmatter(state.sourceText, patches);
+  return bodyText === undefined ? nextSourceText : replaceMarkdownBody(nextSourceText, bodyText);
+};
