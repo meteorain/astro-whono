@@ -453,6 +453,7 @@ body.admin-page .sidebar {
   align-items: var(--admin-sidebar-align);
   gap: var(--admin-sidebar-gap);
   overflow: visible;
+  z-index: 40;
 }
 
 body.admin-page .sidebar__title--site {

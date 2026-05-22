@@ -1,13 +1,22 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  DEFAULT_EDITOR_DISPLAY_PREFERENCE,
   clampEditorSidePanelStackedRatio,
+  getEditorBodyValueSyncReplacement,
   getEditorSidePanelLayout,
   getEditorSidePanelStackedRatioFromPointer,
-  normalizeEditorTextareaValue,
+  mergeEditorDisplayPreference,
+  normalizeEditorBodyValue,
+  readStoredEditorDisplayPreference,
   readStoredEditorSidePanelPreference,
   resolveEditorLayoutPreference,
   resolveEditorSidePanelPreference
 } from '../src/components/admin/editor/editor-shell-helpers';
+import {
+  DEFAULT_MARKDOWN_HIGHLIGHT_THEME,
+  MARKDOWN_HIGHLIGHT_THEME_OPTIONS,
+  resolveMarkdownHighlightTheme
+} from '../src/components/admin/editor/editor-markdown-highlight';
 import {
   DEFAULT_ADMIN_EDITOR_DEFAULTS,
   parseAdminEditorDefaults,
@@ -19,8 +28,13 @@ describe('admin editor shell helpers', () => {
     vi.unstubAllGlobals();
   });
 
-  it('normalizes editor textarea line endings to browser value coordinates', () => {
-    expect(normalizeEditorTextareaValue('A\r\nB\rC\nD')).toBe('A\nB\nC\nD');
+  it('normalizes editor body line endings to LF coordinates', () => {
+    expect(normalizeEditorBodyValue('A\r\nB\rC\nD')).toBe('A\nB\nC\nD');
+  });
+
+  it('returns an editor value replacement only when external content differs after LF normalization', () => {
+    expect(getEditorBodyValueSyncReplacement('A\nB', 'A\r\nB')).toBeNull();
+    expect(getEditorBodyValueSyncReplacement('A\nB', 'A\r\nC')).toBe('A\nC');
   });
 
   it('derives side panel layout from outline and syntax intent', () => {
@@ -113,6 +127,86 @@ describe('admin editor shell helpers', () => {
       outlineOpen: true,
       outlineActiveTab: 'headings',
       syntaxOpen: false
+    });
+  });
+
+  it('resolves markdown highlight theme presets conservatively', () => {
+    expect(MARKDOWN_HIGHLIGHT_THEME_OPTIONS.map((option) => option.id)).toEqual([
+      'github',
+      'nord',
+      'onedark',
+      'classic',
+      'vivid'
+    ]);
+    expect(resolveMarkdownHighlightTheme('github')).toBe('github');
+    expect(resolveMarkdownHighlightTheme('nord')).toBe('nord');
+    expect(resolveMarkdownHighlightTheme('onedark')).toBe('onedark');
+    expect(resolveMarkdownHighlightTheme('vivid')).toBe('vivid');
+    expect(resolveMarkdownHighlightTheme('subtle')).toBe('github');
+    expect(resolveMarkdownHighlightTheme('structured')).toBe('nord');
+    expect(resolveMarkdownHighlightTheme('solarized')).toBe(DEFAULT_MARKDOWN_HIGHLIGHT_THEME);
+    expect(resolveMarkdownHighlightTheme(null)).toBe(DEFAULT_MARKDOWN_HIGHLIGHT_THEME);
+  });
+
+  it('reads legacy display preferences with default markdown highlight theme', () => {
+    const localStorage = {
+      getItem: vi.fn(() => JSON.stringify({
+        lineNumbers: true
+      })),
+      setItem: vi.fn()
+    };
+    vi.stubGlobal('window', { localStorage });
+
+    expect(readStoredEditorDisplayPreference('display')).toEqual({
+      lineNumbers: true,
+      markdownHighlightTheme: DEFAULT_MARKDOWN_HIGHLIGHT_THEME
+    });
+  });
+
+  it('falls back invalid markdown highlight theme in display preferences', () => {
+    const localStorage = {
+      getItem: vi.fn(() => JSON.stringify({
+        lineNumbers: false,
+        markdownHighlightTheme: 'solarized'
+      })),
+      setItem: vi.fn()
+    };
+    vi.stubGlobal('window', { localStorage });
+
+    expect(readStoredEditorDisplayPreference('display')).toEqual(DEFAULT_EDITOR_DISPLAY_PREFERENCE);
+  });
+
+  it('rejects display preferences without a line number boolean', () => {
+    const localStorage = {
+      getItem: vi.fn(() => JSON.stringify({
+        markdownHighlightTheme: 'nord'
+      })),
+      setItem: vi.fn()
+    };
+    vi.stubGlobal('window', { localStorage });
+
+    expect(readStoredEditorDisplayPreference('display')).toBeNull();
+  });
+
+  it('merges editor display preferences without dropping unrelated fields', () => {
+    expect(mergeEditorDisplayPreference({
+      lineNumbers: true,
+      markdownHighlightTheme: 'nord'
+    }, {
+      lineNumbers: false
+    })).toEqual({
+      lineNumbers: false,
+      markdownHighlightTheme: 'nord'
+    });
+
+    expect(mergeEditorDisplayPreference({
+      lineNumbers: true,
+      markdownHighlightTheme: 'github'
+    }, {
+      markdownHighlightTheme: 'onedark'
+    })).toEqual({
+      lineNumbers: true,
+      markdownHighlightTheme: 'onedark'
     });
   });
 

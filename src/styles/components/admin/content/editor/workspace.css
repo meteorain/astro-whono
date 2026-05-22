@@ -12,7 +12,13 @@
   grid-template-rows: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 0;
   min-height: 0;
+  min-width: 0;
   height: 100%;
+}
+
+.admin-editor-shell__pane {
+  min-height: 0;
+  min-width: 0;
 }
 
 .admin-editor-body__field {
@@ -22,7 +28,11 @@
 
 .admin-editor-body,
 .admin-editor-preview {
+  display: grid;
   grid-template-rows: minmax(0, 1fr);
+  gap: 12px;
+  min-height: 0;
+  min-width: 0;
   height: 100%;
 }
 
@@ -38,16 +48,16 @@
   transition: background-color 160ms ease;
 }
 
+.admin-editor-shell__pane--body[data-line-numbers='true'] {
+  padding-inline-start: 0;
+}
+
 .admin-editor-shell__pane--body:hover {
   background: var(--admin-editor-body-surface-hover);
 }
 
 .admin-editor-shell__pane--body:focus-within {
   background: var(--admin-editor-body-surface-focus);
-}
-
-.admin-editor-shell__pane--body:focus-within + .admin-editor-shell__preview-bar {
-  border-top-color: var(--admin-editor-shell-focus-divider);
 }
 
 .admin-editor-shell__preview-bar {

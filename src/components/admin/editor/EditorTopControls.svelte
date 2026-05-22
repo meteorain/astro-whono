@@ -8,6 +8,7 @@ import type {
   MarkdownHeadingLevel,
   MarkdownToolId
 } from './markdown-tools';
+import type { MarkdownHighlightTheme } from './editor-markdown-highlight';
 import EditorActionMenu from './EditorActionMenu.svelte';
 import EditorToolbar from './EditorToolbar.svelte';
 
@@ -24,6 +25,9 @@ type Props = {
   syntaxToggleLabel: string;
   syntaxControlDisabled: boolean;
   syntaxPanelId: string;
+  lineNumbersEnabled: boolean;
+  lineNumbersToggleLabel: string;
+  markdownHighlightTheme: MarkdownHighlightTheme;
   editorLayoutIsSplit: boolean;
   editorLayoutToggleLabel: string;
   editorLayoutToggleIcon: 'columns-2' | 'rows-2' | 'undo-2';
@@ -46,6 +50,8 @@ type Props = {
   onApplyCallout: (calloutType: MarkdownCalloutType) => void;
   onToggleOutline: () => void;
   onToggleSyntax: () => void;
+  onToggleLineNumbers: () => void;
+  onSelectMarkdownHighlightTheme: (theme: MarkdownHighlightTheme) => void;
   onToggleLayout: () => void;
   onToggleView: (viewMode: Exclude<EditorViewMode, 'both'>) => void;
   onReturnToBothView: () => void;
@@ -69,6 +75,9 @@ let {
   syntaxToggleLabel,
   syntaxControlDisabled,
   syntaxPanelId,
+  lineNumbersEnabled,
+  lineNumbersToggleLabel,
+  markdownHighlightTheme,
   editorLayoutIsSplit,
   editorLayoutToggleLabel,
   editorLayoutToggleIcon,
@@ -91,6 +100,8 @@ let {
   onApplyCallout,
   onToggleOutline,
   onToggleSyntax,
+  onToggleLineNumbers,
+  onSelectMarkdownHighlightTheme,
   onToggleLayout,
   onToggleView,
   onReturnToBothView,
@@ -114,6 +125,9 @@ let {
   {syntaxToggleLabel}
   {syntaxControlDisabled}
   {syntaxPanelId}
+  {lineNumbersEnabled}
+  {lineNumbersToggleLabel}
+  {markdownHighlightTheme}
   {editorLayoutIsSplit}
   {editorLayoutToggleLabel}
   {editorLayoutToggleIcon}
@@ -130,6 +144,8 @@ let {
   {onApplyCallout}
   {onToggleOutline}
   {onToggleSyntax}
+  {onToggleLineNumbers}
+  {onSelectMarkdownHighlightTheme}
   {onToggleLayout}
   {onToggleView}
   {onReturnToBothView}

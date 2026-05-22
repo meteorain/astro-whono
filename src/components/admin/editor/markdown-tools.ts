@@ -37,24 +37,5 @@ export type MarkdownToolbarCommand =
       text: string;
     };
 
-export type MarkdownShortcutKeyState = {
-  key: string;
-  ctrlKey?: boolean;
-  metaKey?: boolean;
-  shiftKey?: boolean;
-  altKey?: boolean;
-};
-
-export const getMarkdownShortcutTool = (event: MarkdownShortcutKeyState): MarkdownToolId | null => {
-  if ((!event.ctrlKey && !event.metaKey) || event.altKey) return null;
-
-  const key = event.key.toLowerCase();
-  if (event.shiftKey) return null;
-  if (key === 'b') return 'bold';
-  if (key === 'i') return 'italic';
-  if (key === 'k') return 'link';
-  return null;
-};
-
 export const buildMarkdownCalloutText = (calloutType: MarkdownCalloutType): string =>
   `\n:::${calloutType}[标题]\n内容\n:::\n`;

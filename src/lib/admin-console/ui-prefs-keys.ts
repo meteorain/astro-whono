@@ -2,6 +2,7 @@ export const ADMIN_SIDEBAR_NAV_MODE_STORAGE_KEY = 'astro-whono:admin-sidebar:nav
 export const ADMIN_SHOW_TOP_NAV_STORAGE_KEY = 'astro-whono:admin:show-top-nav';
 export const ADMIN_DEFAULT_SIDEBAR_NAV_MODE_STORAGE_KEY = 'astro-whono:admin-sidebar:default-nav-mode';
 export const ADMIN_EDITOR_DEFAULTS_STORAGE_KEY = 'astro-whono:admin-editor:defaults';
+export const ADMIN_EDITOR_DISPLAY_PREFERENCE_STORAGE_KEY = 'astro-whono:admin-editor:display';
 export const ADMIN_EDITOR_LAYOUT_STORAGE_KEY = 'astro-whono:admin-editor:layout';
 export const ADMIN_EDITOR_SIDE_PANEL_PREFERENCE_STORAGE_KEY = 'astro-whono:admin-editor:outline-state';
 

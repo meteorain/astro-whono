@@ -8,7 +8,6 @@
   --admin-editor-outline-inline-size: 224px;
   --admin-editor-outline-gap-inline-size: 8px;
   --admin-editor-shell-divider: color-mix(in srgb, var(--border) 76%, transparent);
-  --admin-editor-shell-focus-divider: color-mix(in srgb, var(--admin-focus-border) 62%, var(--border) 38%);
   --admin-editor-body-max-inline-size: 760px;
   --admin-editor-single-pane-max-inline-size: 980px;
   --admin-editor-preview-content-max-inline-size: var(--article-readable-inline-size);

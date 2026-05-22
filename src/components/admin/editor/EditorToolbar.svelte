@@ -1,6 +1,12 @@
 <script lang="ts">
 import AdminEditorIcon from './AdminEditorIcon.svelte';
 import type { EditorPaneMode, EditorViewMode } from './editor-shell-helpers';
+import {
+  DEFAULT_MARKDOWN_HIGHLIGHT_THEME,
+  MARKDOWN_HIGHLIGHT_THEME_OPTIONS,
+  getMarkdownHighlightThemeLabel,
+  type MarkdownHighlightTheme
+} from './editor-markdown-highlight';
 import type { MarkdownCalloutType, MarkdownHeadingLevel, MarkdownToolId } from './markdown-tools';
 
 type LayoutIconName = 'columns-2' | 'rows-2' | 'undo-2';
@@ -49,6 +55,9 @@ type Props = {
   syntaxToggleLabel: string;
   syntaxControlDisabled?: boolean;
   syntaxPanelId: string;
+  lineNumbersEnabled?: boolean;
+  lineNumbersToggleLabel: string;
+  markdownHighlightTheme: MarkdownHighlightTheme;
   editorLayoutIsSplit?: boolean;
   editorLayoutToggleLabel: string;
   editorLayoutToggleIcon: LayoutIconName;
@@ -65,6 +74,8 @@ type Props = {
   onApplyCallout: (calloutType: MarkdownCalloutType) => void;
   onToggleOutline: () => void;
   onToggleSyntax: () => void;
+  onToggleLineNumbers: () => void;
+  onSelectMarkdownHighlightTheme: (theme: MarkdownHighlightTheme) => void;
   onToggleLayout: () => void;
   onToggleView: (viewMode: EditorPaneMode) => void;
   onReturnToBothView: () => void;
@@ -83,6 +94,9 @@ let {
   syntaxToggleLabel,
   syntaxControlDisabled = false,
   syntaxPanelId,
+  lineNumbersEnabled = false,
+  lineNumbersToggleLabel,
+  markdownHighlightTheme,
   editorLayoutIsSplit = false,
   editorLayoutToggleLabel,
   editorLayoutToggleIcon,
@@ -99,6 +113,8 @@ let {
   onApplyCallout,
   onToggleOutline,
   onToggleSyntax,
+  onToggleLineNumbers,
+  onSelectMarkdownHighlightTheme,
   onToggleLayout,
   onToggleView,
   onReturnToBothView,
@@ -109,10 +125,18 @@ let headingMenuOpen = $state(false);
 let headingMenuEl = $state<HTMLDetailsElement | null>(null);
 let calloutMenuOpen = $state(false);
 let calloutMenuEl = $state<HTMLDetailsElement | null>(null);
+let displayMenuOpen = $state(false);
+let displayMenuEl = $state<HTMLDetailsElement | null>(null);
 
 const layoutControlLabel = $derived(singleViewActive ? singleViewReturnLabel : editorLayoutToggleLabel);
 const layoutControlIcon = $derived(singleViewActive ? 'undo-2' : editorLayoutToggleIcon);
 const layoutControlPressed = $derived(singleViewActive ? undefined : editorLayoutIsSplit ? 'true' : 'false');
+const markdownHighlightThemeLabel = $derived(getMarkdownHighlightThemeLabel(markdownHighlightTheme));
+const displayMenuTooltipLabel = '编辑器外观';
+const displayMenuLabel = $derived(`编辑器外观：${lineNumbersEnabled ? '行号开' : '行号关'}，高亮 ${markdownHighlightThemeLabel}`);
+const displayControlPressed = $derived(
+  lineNumbersEnabled || markdownHighlightTheme !== DEFAULT_MARKDOWN_HIGHLIGHT_THEME ? 'true' : 'false'
+);
 
 const closeHeadingMenu = () => {
   if (headingMenuEl) headingMenuEl.open = false;
@@ -130,6 +154,10 @@ const syncHeadingMenuOpen = () => {
 
 const syncCalloutMenuOpen = () => {
   calloutMenuOpen = calloutMenuEl?.open ?? false;
+};
+
+const syncDisplayMenuOpen = () => {
+  displayMenuOpen = displayMenuEl?.open ?? false;
 };
 
 const handleHeadingSummaryClick = (event: MouseEvent) => {
@@ -279,7 +307,7 @@ $effect(() => {
     {/each}
   </div>
 
-  <div class="admin-editor-shell__layout-controls" aria-label="编辑器目录、布局与视图">
+  <div class="admin-editor-shell__layout-controls" aria-label="编辑器显示、目录、布局与视图">
     <button
       class="admin-editor-markdown-toolbar__button admin-editor-layout-toggle"
       type="button"
@@ -290,6 +318,71 @@ $effect(() => {
     >
       <AdminEditorIcon name={layoutControlIcon} size={16} strokeWidth={2} />
     </button>
+    <details
+      class="admin-editor-markdown-toolbar__menu admin-editor-display-menu"
+      class:is-open={displayMenuOpen}
+      bind:this={displayMenuEl}
+      ontoggle={syncDisplayMenuOpen}
+    >
+      <summary
+        class="admin-editor-markdown-toolbar__button admin-editor-display-toggle"
+        data-tooltip={displayMenuTooltipLabel}
+        aria-label={displayMenuLabel}
+        aria-expanded={displayMenuOpen ? 'true' : 'false'}
+        aria-pressed={displayControlPressed}
+      >
+        <AdminEditorIcon name="m-square" size={16} strokeWidth={2} />
+      </summary>
+
+      <div
+        class="admin-content-menu-panel admin-editor-display-menu__panel"
+        id="admin-editor-display-menu"
+        aria-label="编辑器显示"
+      >
+        <button
+          class="admin-content-menu-item admin-editor-display-menu__line-toggle"
+          type="button"
+          aria-pressed={lineNumbersEnabled ? 'true' : 'false'}
+          onclick={onToggleLineNumbers}
+        >
+          <span>{lineNumbersToggleLabel}</span>
+          <span class="admin-editor-display-menu__state">{lineNumbersEnabled ? 'On' : 'Off'}</span>
+        </button>
+
+        <div
+          class="admin-editor-display-menu__group"
+          role="radiogroup"
+          aria-label="Markdown 高亮主题"
+        >
+          <span class="admin-editor-display-menu__group-label">Markdown 高亮主题</span>
+          {#each MARKDOWN_HIGHLIGHT_THEME_OPTIONS as option}
+            <label
+              class="admin-content-menu-item admin-editor-highlight-menu__item"
+              data-selected={markdownHighlightTheme === option.id ? 'true' : undefined}
+            >
+              <input
+                class="admin-editor-highlight-menu__radio"
+                type="radio"
+                name="admin-editor-markdown-highlight-theme"
+                value={option.id}
+                checked={markdownHighlightTheme === option.id}
+                onchange={() => onSelectMarkdownHighlightTheme(option.id)}
+              />
+              <span
+                class="admin-editor-highlight-menu__swatch"
+                data-theme={option.id}
+                aria-hidden="true"
+              ></span>
+              <span class="admin-editor-highlight-menu__text">
+                <span class="admin-editor-highlight-menu__description">{option.description}</span>
+                <span class="admin-editor-highlight-menu__separator" aria-hidden="true">|</span>
+                <span class="admin-editor-highlight-menu__label">{option.label}</span>
+              </span>
+            </label>
+          {/each}
+        </div>
+      </div>
+    </details>
     {#if splitBothIsCompact}
       <button
         class="admin-editor-compact-pane-toggle"

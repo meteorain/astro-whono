@@ -1,18 +1,38 @@
 <script lang="ts">
+import { onMount } from 'svelte';
+import { history, historyKeymap, defaultKeymap } from '@codemirror/commands';
+import { markdown } from '@codemirror/lang-markdown';
+import { Compartment, EditorSelection, EditorState, Transaction, type Extension } from '@codemirror/state';
+import { EditorView, keymap, lineNumbers, type KeyBinding } from '@codemirror/view';
 import {
-  buildMarkdownCalloutText,
-  getMarkdownShortcutTool,
-  type MarkdownCalloutType,
-  type MarkdownHeadingLevel,
-  type MarkdownToolbarCommand,
-  type MarkdownToolId
+  getEditorBodyValueSyncReplacement,
+  normalizeEditorBodyValue
+} from './editor-shell-helpers';
+import {
+  getMarkdownOutlineSelectionRange,
+  type MarkdownOutlineJumpCommand
+} from './editor-outline-helpers';
+import {
+  applyMarkdownToolbarCommandToText,
+  applyMarkdownToolToText,
+  type EditorTextSelection,
+  type MarkdownTextEdit
+} from './editor-markdown-transforms';
+import { getMarkdownCodeDecorationsExtension } from './editor-markdown-code-decorations';
+import { getMarkdownHighlightExtension } from './editor-markdown-highlight-extension';
+import type {
+  MarkdownToolbarCommand,
+  MarkdownToolId
 } from './markdown-tools';
 
 type Props = {
   value: string;
   disabled?: boolean;
   toolbarCommand?: MarkdownToolbarCommand | null;
-  onScrollElementChange?: (element: HTMLTextAreaElement | null) => void;
+  outlineJumpCommand?: MarkdownOutlineJumpCommand | null;
+  lineNumbersEnabled?: boolean;
+  onScrollElementChange?: (element: HTMLElement | null) => void;
+  onOutlineJump?: (element: HTMLElement) => void;
   onShortcutTool?: (toolId: MarkdownToolId) => void;
 };
 
@@ -20,246 +40,260 @@ let {
   value = $bindable(''),
   disabled = false,
   toolbarCommand = null,
+  outlineJumpCommand = null,
+  lineNumbersEnabled = false,
   onScrollElementChange,
+  onOutlineJump,
   onShortcutTool
 }: Props = $props();
 
-let textareaEl = $state<HTMLTextAreaElement | null>(null);
+let editorHostEl = $state<HTMLDivElement | null>(null);
+let view = $state<EditorView | null>(null);
 let appliedToolbarCommandId = 0;
+let appliedOutlineJumpCommandId = 0;
+let lastKnownEditorValue = '';
 
-const focusTextarea = () => {
-  textareaEl?.focus();
+const readOnlyCompartment = new Compartment();
+const editableCompartment = new Compartment();
+const lineNumbersCompartment = new Compartment();
+
+const getEditorSelection = (editorView: EditorView): EditorTextSelection => {
+  const selection = editorView.state.selection.main;
+  return {
+    from: selection.from,
+    to: selection.to
+  };
 };
 
-const commitTextareaValue = (nextSelectionStart: number, nextSelectionEnd = nextSelectionStart) => {
-  if (!textareaEl) return;
-  value = textareaEl.value;
-  textareaEl.setSelectionRange(nextSelectionStart, nextSelectionEnd);
-  focusTextarea();
-};
+const dispatchMarkdownEdit = (edit: MarkdownTextEdit) => {
+  if (!view) return;
 
-const wrapSelection = (before: string, after: string, placeholder: string) => {
-  if (!textareaEl) return;
-  focusTextarea();
-
-  const start = textareaEl.selectionStart ?? 0;
-  const end = textareaEl.selectionEnd ?? start;
-  const selected = start === end ? placeholder : value.slice(start, end);
-  const next = `${before}${selected}${after}`;
-  const innerStart = start + before.length;
-  const innerEnd = innerStart + selected.length;
-
-  textareaEl.setRangeText(next, start, end, 'select');
-  commitTextareaValue(innerStart, innerEnd);
-};
-
-const wrapBlockSelection = (before: string, after: string, placeholder: string) => {
-  if (!textareaEl) return;
-  focusTextarea();
-
-  const start = textareaEl.selectionStart ?? 0;
-  const end = textareaEl.selectionEnd ?? start;
-  const selected = start === end ? placeholder : value.slice(start, end);
-  const previousChar = start > 0 ? value[start - 1] : '\n';
-  const nextChar = end < value.length ? value[end] : '\n';
-  const lead = previousChar === '\n' ? '' : '\n';
-  const trail = nextChar === '\n' ? '' : '\n';
-  const next = `${lead}${before}${selected}${after}${trail}`;
-  const innerStart = start + lead.length + before.length;
-  const innerEnd = innerStart + selected.length;
-
-  textareaEl.setRangeText(next, start, end, 'select');
-  commitTextareaValue(innerStart, innerEnd);
-};
-
-const toggleLinePrefix = (prefix: string) => {
-  if (!textareaEl) return;
-  focusTextarea();
-
-  const start = textareaEl.selectionStart ?? 0;
-  const end = textareaEl.selectionEnd ?? start;
-  const lineStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
-  const lineEndIndex = value.indexOf('\n', end);
-  const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
-  const segment = value.slice(lineStart, lineEnd);
-  const lines = segment.split('\n');
-  const shouldRemove = segment.length > 0 && lines.every((line) => line.length === 0 || line.startsWith(prefix));
-  const next = lines
-    .map((line) => {
-      if (shouldRemove) return line.startsWith(prefix) ? line.slice(prefix.length) : line;
-      return `${prefix}${line}`;
-    })
-    .join('\n');
-
-  textareaEl.setRangeText(next, lineStart, lineEnd, 'select');
-  commitTextareaValue(lineStart, lineStart + next.length);
-};
-
-const setHeadingLevel = (level: MarkdownHeadingLevel) => {
-  if (!textareaEl) return;
-  focusTextarea();
-
-  const prefix = `${'#'.repeat(level)} `;
-  const start = textareaEl.selectionStart ?? 0;
-  const end = textareaEl.selectionEnd ?? start;
-  const lineStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
-  const lineEndIndex = value.indexOf('\n', end);
-  const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
-  const segment = value.slice(lineStart, lineEnd);
-  const next = segment
-    .split('\n')
-    .map((line) => {
-      const headingMatch = line.match(/^( {0,3})#{1,6}(?:[ \t]+(.*))?$/);
-      if (headingMatch) {
-        const [, indent, text] = headingMatch;
-        return `${indent}${prefix}${text ?? ''}`;
-      }
-
-      const leadingWhitespace = line.match(/^\s*/)?.[0] ?? '';
-      const leadingSpaces = line.match(/^ */)?.[0] ?? '';
-      if (leadingWhitespace.includes('\t') || leadingSpaces.length > 3) {
-        const strippedLine = line.replace(/^\s+/, '');
-        return `${prefix}${strippedLine.replace(/^#{1,6}\s+/, '')}`;
-      }
-
-      return `${leadingSpaces}${prefix}${line.slice(leadingSpaces.length)}`;
-    })
-    .join('\n');
-
-  textareaEl.setRangeText(next, lineStart, lineEnd, 'select');
-  commitTextareaValue(lineStart, lineStart + next.length);
-};
-
-const insertCallout = (calloutType: MarkdownCalloutType) => {
-  insertText(buildMarkdownCalloutText(calloutType));
-};
-
-const toggleOrderedList = () => {
-  if (!textareaEl) return;
-  focusTextarea();
-
-  const start = textareaEl.selectionStart ?? 0;
-  const end = textareaEl.selectionEnd ?? start;
-  const lineStart = value.lastIndexOf('\n', Math.max(0, start - 1)) + 1;
-  const lineEndIndex = value.indexOf('\n', end);
-  const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
-  const segment = value.slice(lineStart, lineEnd);
-  const lines = segment.split('\n');
-  const shouldRemove = segment.length > 0 && lines.every((line) => line.length === 0 || /^\d+\.\s+/.test(line));
-  const next = lines
-    .map((line, index) => {
-      if (shouldRemove) return line.replace(/^\d+\.\s+/, '');
-      return `${index + 1}. ${line}`;
-    })
-    .join('\n');
-
-  textareaEl.setRangeText(next, lineStart, lineEnd, 'select');
-  commitTextareaValue(lineStart, lineStart + next.length);
-};
-
-const insertText = (text: string) => {
-  if (!textareaEl) return;
-  focusTextarea();
-
-  const start = textareaEl.selectionStart ?? 0;
-  const end = textareaEl.selectionEnd ?? start;
-  textareaEl.setRangeText(text, start, end, 'end');
-  commitTextareaValue(start + text.length);
-};
-
-const applyMarkdownTool = (toolId: MarkdownToolId) => {
-  if (disabled) return;
-
-  switch (toolId) {
-    case 'bold':
-      wrapSelection('**', '**', 'text');
-      break;
-    case 'italic':
-      wrapSelection('*', '*', 'text');
-      break;
-    case 'strikethrough':
-      wrapSelection('~~', '~~', 'text');
-      break;
-    case 'code':
-      wrapSelection('`', '`', 'code');
-      break;
-    case 'quote':
-      toggleLinePrefix('> ');
-      break;
-    case 'link':
-      wrapSelection('[', '](url)', 'text');
-      break;
-    case 'image':
-      break;
-    case 'codeBlock':
-      wrapBlockSelection('```text\n', '\n```', 'code');
-      break;
-    case 'list':
-      toggleLinePrefix('- ');
-      break;
-    case 'orderedList':
-      toggleOrderedList();
-      break;
-    case 'taskList':
-      toggleLinePrefix('- [ ] ');
-      break;
-    case 'table':
-      insertText('\n| Column | Column |\n| --- | --- |\n| Cell | Cell |\n');
-      break;
-  }
-};
-
-const handleKeydown = (event: KeyboardEvent) => {
-  if (disabled) return;
-
-  const toolId = getMarkdownShortcutTool(event);
-  if (!toolId) return;
-
-  event.preventDefault();
-  if (onShortcutTool) {
-    onShortcutTool(toolId);
+  const currentSelection = view.state.selection.main;
+  if (
+    edit.from === edit.to
+    && edit.insert === ''
+    && edit.selection.from === currentSelection.from
+    && edit.selection.to === currentSelection.to
+  ) {
     return;
   }
 
-  applyMarkdownTool(toolId);
+  const nextLength = view.state.doc.length - (edit.to - edit.from) + edit.insert.length;
+  view.dispatch({
+    changes: {
+      from: edit.from,
+      to: edit.to,
+      insert: edit.insert
+    },
+    selection: {
+      anchor: Math.min(edit.selection.from, nextLength),
+      head: Math.min(edit.selection.to, nextLength)
+    },
+    scrollIntoView: true
+  });
+  view.focus();
 };
+
+const getOutlineScrollYMargin = (
+  scroller: HTMLElement,
+  targetOffsetRatio: number | undefined
+): number => {
+  if (!targetOffsetRatio) return 0;
+  return Math.max(0, Math.round(scroller.clientHeight * targetOffsetRatio));
+};
+
+const applyOutlineJumpCommand = (
+  editorView: EditorView,
+  command: MarkdownOutlineJumpCommand
+) => {
+  const source = normalizeEditorBodyValue(editorView.state.doc.toString());
+  const { selectionStart: from, selectionEnd: to } = getMarkdownOutlineSelectionRange(source, command.item);
+  const selectionRange = EditorSelection.range(from, to);
+
+  editorView.dispatch({
+    selection: { anchor: from, head: to },
+    effects: EditorView.scrollIntoView(selectionRange, {
+      y: 'start',
+      yMargin: getOutlineScrollYMargin(editorView.scrollDOM, command.targetOffsetRatio)
+    })
+  });
+  editorView.focus();
+  onOutlineJump?.(editorView.scrollDOM);
+};
+
+const applyMarkdownTool = (toolId: MarkdownToolId): boolean => {
+  if (disabled || !view) return false;
+
+  dispatchMarkdownEdit(
+    applyMarkdownToolToText(
+      view.state.doc.toString(),
+      getEditorSelection(view),
+      toolId
+    )
+  );
+  return true;
+};
+
+const applyToolbarCommand = (command: MarkdownToolbarCommand) => {
+  if (disabled || !view) return;
+
+  dispatchMarkdownEdit(
+    applyMarkdownToolbarCommandToText(
+      view.state.doc.toString(),
+      getEditorSelection(view),
+      command
+    )
+  );
+};
+
+const applyShortcutTool = (toolId: MarkdownToolId): boolean => {
+  if (disabled) return false;
+  if (onShortcutTool) {
+    onShortcutTool(toolId);
+    return true;
+  }
+
+  return applyMarkdownTool(toolId);
+};
+
+const markdownKeymap: readonly KeyBinding[] = [
+  { key: 'Mod-b', run: () => applyShortcutTool('bold') },
+  { key: 'Mod-i', run: () => applyShortcutTool('italic') },
+  { key: 'Mod-k', run: () => applyShortcutTool('link') }
+];
+
+const createEditorExtensions = (): Extension[] => [
+  markdown({
+    completeHTMLTags: false,
+    pasteURLAsLink: true
+  }),
+  getMarkdownHighlightExtension(),
+  getMarkdownCodeDecorationsExtension(),
+  history(),
+  EditorView.lineWrapping,
+  lineNumbersCompartment.of(lineNumbersEnabled ? lineNumbers() : []),
+  EditorView.contentAttributes.of({
+    'aria-label': 'Markdown 正文',
+    spellcheck: 'false'
+  }),
+  keymap.of([
+    ...markdownKeymap,
+    ...historyKeymap,
+    ...defaultKeymap
+  ]),
+  readOnlyCompartment.of(EditorState.readOnly.of(disabled)),
+  editableCompartment.of(EditorView.editable.of(!disabled)),
+  EditorView.updateListener.of((update) => {
+    if (!update.docChanged) return;
+
+    const nextValue = normalizeEditorBodyValue(update.state.doc.toString());
+    lastKnownEditorValue = nextValue;
+    if (nextValue !== value) {
+      value = nextValue;
+    }
+  })
+];
+
+onMount(() => {
+  if (!editorHostEl) return;
+
+  const initialValue = normalizeEditorBodyValue(value);
+  if (initialValue !== value) {
+    value = initialValue;
+  }
+  lastKnownEditorValue = initialValue;
+
+  const editorView = new EditorView({
+    state: EditorState.create({
+      doc: initialValue,
+      extensions: createEditorExtensions()
+    }),
+    parent: editorHostEl
+  });
+
+  view = editorView;
+  onScrollElementChange?.(editorView.scrollDOM);
+
+  return () => {
+    onScrollElementChange?.(null);
+    editorView.destroy();
+    view = null;
+  };
+});
+
+$effect(() => {
+  const editorView = view;
+  if (!editorView) return;
+
+  editorView.dispatch({
+    effects: [
+      readOnlyCompartment.reconfigure(EditorState.readOnly.of(disabled)),
+      editableCompartment.reconfigure(EditorView.editable.of(!disabled))
+    ]
+  });
+});
+
+$effect(() => {
+  const editorView = view;
+  if (!editorView) return;
+
+  editorView.dispatch({
+    effects: lineNumbersCompartment.reconfigure(lineNumbersEnabled ? lineNumbers() : [])
+  });
+});
+
+$effect(() => {
+  const editorView = view;
+  if (!editorView) return;
+
+  const normalizedValue = normalizeEditorBodyValue(value);
+  if (normalizedValue !== value) {
+    value = normalizedValue;
+    return;
+  }
+  if (normalizedValue === lastKnownEditorValue) return;
+
+  const replacement = getEditorBodyValueSyncReplacement(editorView.state.doc.toString(), normalizedValue);
+  if (replacement === null) {
+    lastKnownEditorValue = normalizedValue;
+    return;
+  }
+
+  lastKnownEditorValue = replacement;
+  editorView.dispatch({
+    changes: {
+      from: 0,
+      to: editorView.state.doc.length,
+      insert: replacement
+    },
+    annotations: Transaction.addToHistory.of(false)
+  });
+});
 
 $effect(() => {
   const command = toolbarCommand;
   if (!command || command.id === appliedToolbarCommandId) return;
 
   appliedToolbarCommandId = command.id;
-  if (command.kind === 'insert') {
-    insertText(command.text);
-  } else if (command.kind === 'heading') {
-    setHeadingLevel(command.level);
-  } else if (command.kind === 'callout') {
-    insertCallout(command.calloutType);
-  } else {
-    applyMarkdownTool(command.toolId);
-  }
+  applyToolbarCommand(command);
 });
 
 $effect(() => {
-  onScrollElementChange?.(textareaEl);
+  const command = outlineJumpCommand;
+  const editorView = view;
+  if (!command || !editorView || command.id === appliedOutlineJumpCommandId) return;
 
-  return () => {
-    onScrollElementChange?.(null);
-  };
+  appliedOutlineJumpCommandId = command.id;
+  applyOutlineJumpCommand(editorView, command);
 });
 </script>
 
 <section class="admin-editor-body" aria-label="Markdown body editor">
-  <label class="admin-field admin-editor-body__field">
+  <div class="admin-field admin-editor-body__field">
     <span class="admin-sr-only">Markdown 正文</span>
-    <textarea
-      class="admin-field__control admin-editor-body__textarea"
-      name="body"
-      bind:value
-      bind:this={textareaEl}
-      spellcheck="false"
-      {disabled}
-      onkeydown={handleKeydown}
-    ></textarea>
-  </label>
+    <div
+      class="admin-editor-body__codemirror"
+      bind:this={editorHostEl}
+    ></div>
+  </div>
 </section>

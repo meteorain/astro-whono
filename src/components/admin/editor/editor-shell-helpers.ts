@@ -3,6 +3,11 @@ import {
   type AdminContentWriteResult
 } from '../../../scripts/admin-content/entry-transport';
 import type { AdminEditorDefaults } from '../../../lib/admin-console/ui-prefs-keys';
+import {
+  DEFAULT_MARKDOWN_HIGHLIGHT_THEME,
+  resolveMarkdownHighlightTheme,
+  type MarkdownHighlightTheme
+} from './editor-markdown-highlight';
 import type { EditorOutlineTab } from './editor-outline-helpers';
 
 export type StatusState = 'idle' | 'loading' | 'ready' | 'ok' | 'warn' | 'error';
@@ -10,6 +15,10 @@ export type EditorScrollSource = 'body' | 'preview';
 export type EditorLayoutMode = 'stacked' | 'split';
 export type EditorViewMode = 'both' | 'edit' | 'preview';
 export type EditorPaneMode = Exclude<EditorViewMode, 'both'>;
+export type EditorDisplayPreference = {
+  lineNumbers: boolean;
+  markdownHighlightTheme: MarkdownHighlightTheme;
+};
 export type EditorSidePanelLayout =
   | 'none'
   | 'outline'
@@ -46,6 +55,10 @@ type LegacyEditorOutlineState = {
 const STATUS_STATES: readonly StatusState[] = ['idle', 'loading', 'ready', 'ok', 'warn', 'error'];
 const EDITOR_LAYOUT_MODES: readonly EditorLayoutMode[] = ['stacked', 'split'];
 const EDITOR_OUTLINE_TABS: readonly EditorOutlineTab[] = ['headings', 'essays'];
+export const DEFAULT_EDITOR_DISPLAY_PREFERENCE: EditorDisplayPreference = {
+  lineNumbers: false,
+  markdownHighlightTheme: DEFAULT_MARKDOWN_HIGHLIGHT_THEME
+};
 export const DEFAULT_EDITOR_SIDE_PANEL_STACKED_RATIO = 45;
 export const EDITOR_SIDE_PANEL_STACKED_RATIO_STEP = 5;
 export const EDITOR_SIDE_PANEL_OUTLINE_MIN_BLOCK_SIZE = 120;
@@ -74,8 +87,16 @@ export const getPreviewDebounceMs = (source: string): number => {
   return 220;
 };
 
-export const normalizeEditorTextareaValue = (value: string): string =>
+export const normalizeEditorBodyValue = (value: string): string =>
   value.replace(/\r\n?/g, '\n');
+
+export const getEditorBodyValueSyncReplacement = (
+  currentValue: string,
+  nextValue: string
+): string | null => {
+  const normalizedNextValue = normalizeEditorBodyValue(nextValue);
+  return currentValue === normalizedNextValue ? null : normalizedNextValue;
+};
 
 export const getOppositeScrollSource = (source: EditorScrollSource): EditorScrollSource =>
   source === 'body' ? 'preview' : 'body';
@@ -225,6 +246,16 @@ const isEditorLayoutMode = (value: unknown): value is EditorLayoutMode =>
 const isEditorOutlineTab = (value: unknown): value is EditorOutlineTab =>
   EDITOR_OUTLINE_TABS.includes(value as EditorOutlineTab);
 
+const parseEditorDisplayPreference = (value: unknown): EditorDisplayPreference | null => {
+  if (!isRecord(value)) return null;
+  if (typeof value.lineNumbers !== 'boolean') return null;
+
+  return {
+    lineNumbers: value.lineNumbers,
+    markdownHighlightTheme: resolveMarkdownHighlightTheme(value.markdownHighlightTheme)
+  };
+};
+
 const isLegacyEditorOutlineState = (value: unknown): value is LegacyEditorOutlineState => {
   if (!isRecord(value)) return false;
   return typeof value.open === 'boolean' && isEditorOutlineTab(value.activeTab);
@@ -257,6 +288,27 @@ export const storeEditorLayout = (storageKey: string, layoutMode: EditorLayoutMo
     // 布局偏好只改善体验，不影响编辑主流程。
   }
 };
+
+export const readStoredEditorDisplayPreference = (storageKey: string): EditorDisplayPreference | null => {
+  if (typeof window === 'undefined') return null;
+  try {
+    const rawState = window.localStorage.getItem(storageKey);
+    if (!rawState) return null;
+
+    const state: unknown = JSON.parse(rawState);
+    return parseEditorDisplayPreference(state);
+  } catch {
+    return null;
+  }
+};
+
+export const mergeEditorDisplayPreference = (
+  currentPreference: EditorDisplayPreference,
+  nextPreference: Partial<EditorDisplayPreference>
+): EditorDisplayPreference => ({
+  lineNumbers: nextPreference.lineNumbers ?? currentPreference.lineNumbers,
+  markdownHighlightTheme: nextPreference.markdownHighlightTheme ?? currentPreference.markdownHighlightTheme
+});
 
 export const readStoredEditorSidePanelPreference = (storageKey: string): EditorSidePanelPreference | null => {
   if (typeof window === 'undefined') return null;
@@ -297,6 +349,15 @@ export const resolveEditorSidePanelPreference = (
     };
   }
   return storedPreference;
+};
+
+export const storeEditorDisplayPreference = (storageKey: string, state: EditorDisplayPreference) => {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(storageKey, JSON.stringify(state));
+  } catch {
+    // 显示偏好只改善编辑体验，不影响正文编辑主流程。
+  }
 };
 
 export const storeEditorSidePanelPreference = (storageKey: string, state: EditorSidePanelPreference) => {

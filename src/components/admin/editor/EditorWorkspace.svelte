@@ -10,12 +10,14 @@ import type {
 import type {
   EditorOutlineEssayListItem,
   EditorOutlineTab,
+  MarkdownOutlineJumpCommand,
   MarkdownOutlineItem
 } from './editor-outline-helpers';
 import type {
   MarkdownToolbarCommand,
   MarkdownToolId
 } from './markdown-tools';
+import type { MarkdownHighlightTheme } from './editor-markdown-highlight';
 import BodyEditor from './BodyEditor.svelte';
 import EditorSidePanels from './EditorSidePanels.svelte';
 import PreviewPane from './PreviewPane.svelte';
@@ -25,6 +27,9 @@ type Props = {
   value: string;
   disabled?: boolean;
   toolbarCommand?: MarkdownToolbarCommand | null;
+  outlineJumpCommand?: MarkdownOutlineJumpCommand | null;
+  lineNumbersEnabled?: boolean;
+  markdownHighlightTheme: MarkdownHighlightTheme;
   effectiveViewMode: EditorViewMode;
   bodyLineCount: number;
   bodyCharCount: number;
@@ -47,7 +52,8 @@ type Props = {
   outlineActiveTab: EditorOutlineTab;
   markdownOutlineItems: readonly MarkdownOutlineItem[];
   essayOutlineListItems: readonly EditorOutlineEssayListItem[];
-  onBodyScrollElementChange: (element: HTMLTextAreaElement | null) => void;
+  onBodyScrollElementChange: (element: HTMLElement | null) => void;
+  onBodyOutlineJump: (element: HTMLElement) => void;
   onPreviewScrollElementChange: (element: HTMLElement | null) => void;
   onShortcutTool: (toolId: MarkdownToolId) => void;
   onToggleScrollSync: () => void;
@@ -61,6 +67,9 @@ let {
   value = $bindable(''),
   disabled = false,
   toolbarCommand = null,
+  outlineJumpCommand = null,
+  lineNumbersEnabled = false,
+  markdownHighlightTheme,
   effectiveViewMode,
   bodyLineCount,
   bodyCharCount,
@@ -84,6 +93,7 @@ let {
   markdownOutlineItems,
   essayOutlineListItems,
   onBodyScrollElementChange,
+  onBodyOutlineJump,
   onPreviewScrollElementChange,
   onShortcutTool,
   onToggleScrollSync,
@@ -96,12 +106,20 @@ let {
 
 <div class="admin-editor-shell__layout">
   <div class="admin-editor-shell__workspace">
-    <div class="admin-editor-shell__pane admin-editor-shell__pane--body" hidden={effectiveViewMode === 'preview'}>
+    <div
+      class="admin-editor-shell__pane admin-editor-shell__pane--body"
+      data-markdown-highlight-theme={markdownHighlightTheme}
+      data-line-numbers={lineNumbersEnabled ? 'true' : undefined}
+      hidden={effectiveViewMode === 'preview'}
+    >
       <BodyEditor
         bind:value
         {disabled}
         {toolbarCommand}
+        {outlineJumpCommand}
+        {lineNumbersEnabled}
         onScrollElementChange={onBodyScrollElementChange}
+        onOutlineJump={onBodyOutlineJump}
         onShortcutTool={onShortcutTool}
       />
     </div>

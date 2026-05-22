@@ -48,6 +48,7 @@ export const createMarkdownCommandDispatcher = ({
       onCommand({ id: nextCommandId(), kind: 'tool', toolId });
     },
     insertText: (text) => {
+      if (isBusy()) return;
       onCommand({ id: nextCommandId(), kind: 'insert', text });
     }
   };

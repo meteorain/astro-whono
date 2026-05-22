@@ -6,6 +6,7 @@ import {
 } from '../../../lib/admin-console/essay-editor-values';
 import {
   ADMIN_EDITOR_DEFAULTS_STORAGE_KEY,
+  ADMIN_EDITOR_DISPLAY_PREFERENCE_STORAGE_KEY,
   ADMIN_EDITOR_LAYOUT_STORAGE_KEY,
   ADMIN_EDITOR_SIDE_PANEL_PREFERENCE_STORAGE_KEY,
   readStoredAdminEditorDefaults
@@ -38,18 +39,23 @@ import {
 import {
   buildContentExportHref,
   clearStoredWriteFeedback,
+  DEFAULT_EDITOR_DISPLAY_PREFERENCE,
   getEditorSidePanelLayout,
   getPreviewDebounceMs,
   getWriteFieldLabel,
-  normalizeEditorTextareaValue,
+  mergeEditorDisplayPreference,
+  normalizeEditorBodyValue,
+  readStoredEditorDisplayPreference,
   readStoredEditorLayout,
   readStoredEditorSidePanelPreference,
   readStoredWriteFeedback,
   resolveEditorLayoutPreference,
   resolveEditorSidePanelPreference,
+  storeEditorDisplayPreference,
   storeEditorLayout,
   storeEditorSidePanelPreference,
   storeWriteFeedback,
+  type EditorDisplayPreference,
   type EditorLayoutMode,
   type EditorPaneMode,
   type EditorScrollSource,
@@ -57,16 +63,17 @@ import {
   type EditorViewMode,
   type StatusState
 } from './editor-shell-helpers';
+import type { MarkdownHighlightTheme } from './editor-markdown-highlight';
 import { createEditorScrollSyncController } from './editor-scroll-sync';
 import {
   buildEssayOutlineListItems,
   extractMarkdownOutline,
   type EditorOutlineTab,
+  type MarkdownOutlineJumpCommand,
   type MarkdownOutlineItem
 } from './editor-outline-helpers';
 import {
-  scrollPreviewToOutlineKey as scrollPreviewElementToOutlineKey,
-  scrollTextareaToOutlineItem as scrollTextareaElementToOutlineItem
+  scrollPreviewToOutlineKey as scrollPreviewElementToOutlineKey
 } from './editor-outline-scroll';
 import type { MarkdownToolbarCommand } from './markdown-tools';
 import { createMarkdownCommandDispatcher } from './editor-markdown-command-dispatcher';
@@ -118,7 +125,7 @@ const slugPlaceholder = $derived(defaultPublicSlug || flattenEntryIdToSlug(entry
 const createInitialSnapshot = () => ({
   revision,
   frontmatter: cloneFrontmatter(initialFrontmatter),
-  body: normalizeEditorTextareaValue(initialBody),
+  body: normalizeEditorBodyValue(initialBody),
   articleInfoOpen: initialArticleInfoOpen
 });
 
@@ -148,6 +155,7 @@ let outlineActiveTab = $state<EditorOutlineTab>('headings');
 let syntaxWantedOpen = $state(false);
 let syntaxMaximized = $state(false);
 let editorLayoutRestored = false;
+let editorDisplayPreferenceRestored = false;
 let editorSidePanelPreferenceRestored = false;
 let previewRequestId = 0;
 let previewTimer: number | null = null;
@@ -155,6 +163,7 @@ let activePreviewAbortController: AbortController | null = null;
 let latestPreviewSource = '';
 let previewInitialized = false;
 let toolbarCommand = $state<MarkdownToolbarCommand | null>(null);
+let outlineJumpCommand = $state<MarkdownOutlineJumpCommand | null>(null);
 let frontmatterPanelOpen = $state(initialSnapshot.articleInfoOpen);
 let editorDialogs = $state<EditorDialogs | null>(null);
 let imageInsertOpen = $state(false);
@@ -170,12 +179,15 @@ const markdownCommandDispatcher = createMarkdownCommandDispatcher({
 let editorShellEl = $state<HTMLElement | null>(null);
 let editorShellInlineSize = $state(0);
 let topActionsEl = $state<HTMLDivElement | null>(null);
-let bodyScrollElement = $state<HTMLTextAreaElement | null>(null);
+let bodyScrollElement = $state<HTMLElement | null>(null);
 let previewScrollElement = $state<HTMLElement | null>(null);
 let syncScrollEnabled = $state(true);
+let lineNumbersEnabled = $state(false);
+let markdownHighlightTheme = $state<MarkdownHighlightTheme>(DEFAULT_EDITOR_DISPLAY_PREFERENCE.markdownHighlightTheme);
 let writeFeedbackRestored = false;
 let pendingPreviewOutlineKey = $state<string | null>(null);
 let pendingPreviewOutlineJumpId = 0;
+let outlineJumpCommandId = 0;
 
 const getOutlineMinInlineSize = (layout: EditorLayoutMode, viewMode: EditorViewMode): number =>
   layout === 'split' && viewMode === 'both'
@@ -253,6 +265,7 @@ const outlineToggleLabel = $derived(outlineWantedOpen ? '关闭目录' : '打开
 const outlineControlDisabled = $derived(!outlineWantedOpen && !sidePanelsAvailable);
 const syntaxToggleLabel = $derived(syntaxWantedOpen ? '关闭语法实例' : '打开语法实例');
 const syntaxControlDisabled = $derived(!syntaxWantedOpen && !sidePanelsAvailable);
+const lineNumbersToggleLabel = $derived(lineNumbersEnabled ? '隐藏行号' : '显示行号');
 const exportHref = $derived(buildContentExportHref(exportEndpoint, collection, entryId));
 const scrollSyncAvailable = $derived(
   effectiveViewMode === 'both' && Boolean(bodyScrollElement && previewScrollElement)
@@ -338,6 +351,18 @@ const storeCurrentSidePanelPreference = (
   });
 };
 
+const storeCurrentDisplayPreference = (preference: Partial<EditorDisplayPreference> = {}) => {
+  const currentPreference: EditorDisplayPreference = {
+    lineNumbers: lineNumbersEnabled,
+    markdownHighlightTheme
+  };
+
+  storeEditorDisplayPreference(
+    ADMIN_EDITOR_DISPLAY_PREFERENCE_STORAGE_KEY,
+    mergeEditorDisplayPreference(currentPreference, preference)
+  );
+};
+
 const toggleOutline = () => {
   if (outlineWantedOpen) {
     outlineWantedOpen = false;
@@ -362,6 +387,16 @@ const toggleSyntax = () => {
   storeCurrentSidePanelPreference({ syntaxOpen: true });
 };
 
+const toggleLineNumbers = () => {
+  lineNumbersEnabled = !lineNumbersEnabled;
+  storeCurrentDisplayPreference({ lineNumbers: lineNumbersEnabled });
+};
+
+const selectMarkdownHighlightTheme = (theme: MarkdownHighlightTheme) => {
+  markdownHighlightTheme = theme;
+  storeCurrentDisplayPreference({ markdownHighlightTheme: theme });
+};
+
 const toggleSyntaxMaximize = () => {
   if (!syntaxMaximizeAllowed) return;
   syntaxMaximized = !syntaxMaximized;
@@ -376,7 +411,7 @@ const closeImageInsert = () => {
   imageInsertOpen = false;
 };
 
-const setBodyScrollElement = (element: HTMLTextAreaElement | null) => {
+const setBodyScrollElement = (element: HTMLElement | null) => {
   bodyScrollElement = element;
 };
 
@@ -428,18 +463,20 @@ const scrollPreviewToOutlineTarget = (outlineKey: string): boolean => {
   return true;
 };
 
-const scrollTextareaToOutlineTarget = (item: MarkdownOutlineItem): boolean => {
-  const textarea = bodyScrollElement;
-  const scrolled = scrollTextareaElementToOutlineItem(
-    textarea,
-    body,
-    item,
-    { targetOffsetRatio: OUTLINE_TARGET_SCROLL_OFFSET_RATIO }
-  );
-  if (!scrolled || !textarea) return false;
+const scrollBodyToOutlineTarget = (item: MarkdownOutlineItem): boolean => {
+  if (!bodyScrollElement) return false;
 
-  scrollSyncController.markElementScrolling(textarea);
+  outlineJumpCommandId += 1;
+  outlineJumpCommand = {
+    id: outlineJumpCommandId,
+    item,
+    targetOffsetRatio: OUTLINE_TARGET_SCROLL_OFFSET_RATIO
+  };
   return true;
+};
+
+const handleBodyOutlineJump = (element: HTMLElement) => {
+  scrollSyncController.markElementScrolling(element);
 };
 
 const handleOutlineHeadingSelect = (item: MarkdownOutlineItem) => {
@@ -458,7 +495,7 @@ const handleOutlineHeadingSelect = (item: MarkdownOutlineItem) => {
     }
 
     if (shouldScrollBody) {
-      bodyScrolled = scrollTextareaToOutlineTarget(item);
+      bodyScrolled = scrollBodyToOutlineTarget(item);
     }
   } finally {
     scrollSyncController.releaseGuard(2);
@@ -579,7 +616,7 @@ const requestContentWrite = async () => {
     const nextBaseline = latestValues ? cloneFrontmatter(latestValues) : cloneFrontmatter(frontmatter);
     frontmatter = cloneFrontmatter(nextBaseline);
     baselineFrontmatter = cloneFrontmatter(nextBaseline);
-    baselineBody = latestBody !== null ? normalizeEditorTextareaValue(latestBody) : body;
+    baselineBody = latestBody !== null ? normalizeEditorBodyValue(latestBody) : body;
     body = baselineBody;
 
     const nextStatusState: StatusState = result.changed ? 'ok' : 'idle';
@@ -766,6 +803,18 @@ $effect(() => {
 });
 
 $effect(() => {
+  if (editorDisplayPreferenceRestored) return;
+  editorDisplayPreferenceRestored = true;
+
+  const storedDisplayPreference = readStoredEditorDisplayPreference(
+    ADMIN_EDITOR_DISPLAY_PREFERENCE_STORAGE_KEY
+  ) ?? DEFAULT_EDITOR_DISPLAY_PREFERENCE;
+
+  lineNumbersEnabled = storedDisplayPreference.lineNumbers;
+  markdownHighlightTheme = storedDisplayPreference.markdownHighlightTheme;
+});
+
+$effect(() => {
   if (editorSidePanelPreferenceRestored) return;
   editorSidePanelPreferenceRestored = true;
 
@@ -943,6 +992,9 @@ $effect(() => {
     {syntaxToggleLabel}
     {syntaxControlDisabled}
     syntaxPanelId={SYNTAX_PANEL_ID}
+    {lineNumbersEnabled}
+    {lineNumbersToggleLabel}
+    {markdownHighlightTheme}
     editorLayoutIsSplit={editorLayout === 'split'}
     {editorLayoutToggleLabel}
     {editorLayoutToggleIcon}
@@ -959,6 +1011,8 @@ $effect(() => {
     onApplyCallout={markdownCommandDispatcher.applyCallout}
     onToggleOutline={toggleOutline}
     onToggleSyntax={toggleSyntax}
+    onToggleLineNumbers={toggleLineNumbers}
+    onSelectMarkdownHighlightTheme={selectMarkdownHighlightTheme}
     onToggleLayout={toggleEditorLayout}
     onToggleView={toggleEditorViewMode}
     onReturnToBothView={returnToBothView}
@@ -979,6 +1033,9 @@ $effect(() => {
     bind:value={body}
     disabled={busy}
     {toolbarCommand}
+    {outlineJumpCommand}
+    {lineNumbersEnabled}
+    {markdownHighlightTheme}
     {effectiveViewMode}
     {bodyLineCount}
     {bodyCharCount}
@@ -1002,6 +1059,7 @@ $effect(() => {
     {markdownOutlineItems}
     {essayOutlineListItems}
     onBodyScrollElementChange={setBodyScrollElement}
+    onBodyOutlineJump={handleBodyOutlineJump}
     onPreviewScrollElementChange={setPreviewScrollElement}
     onShortcutTool={markdownCommandDispatcher.applyTool}
     onToggleScrollSync={toggleScrollSync}

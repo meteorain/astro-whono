@@ -21,10 +21,12 @@ import LockOpen from '@lucide/svelte/icons/lock-open';
 import Maximize2 from '@lucide/svelte/icons/maximize-2';
 import MessageSquareText from '@lucide/svelte/icons/message-square-text';
 import Minimize2 from '@lucide/svelte/icons/minimize-2';
+import MSquare from '@lucide/svelte/icons/m-square';
 import NotebookPen from '@lucide/svelte/icons/notebook-pen';
 import Quote from '@lucide/svelte/icons/quote';
 import RotateCcw from '@lucide/svelte/icons/rotate-ccw';
 import Rows2 from '@lucide/svelte/icons/rows-2';
+import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 import SquareAsterisk from '@lucide/svelte/icons/square-asterisk';
 import SquareChartGantt from '@lucide/svelte/icons/square-chart-gantt';
 import Strikethrough from '@lucide/svelte/icons/strikethrough';
@@ -59,11 +61,13 @@ const icons = {
   'maximize-2': Maximize2,
   'message-square-text': MessageSquareText,
   'minimize-2': Minimize2,
+  'm-square': MSquare,
   'notebook-pen': NotebookPen,
   'ordered-list': ListOrdered,
   quote: Quote,
   'rotate-ccw': RotateCcw,
   'rows-2': Rows2,
+  'sliders-horizontal': SlidersHorizontal,
   'square-asterisk': SquareAsterisk,
   'square-chart-gantt': SquareChartGantt,
   strikethrough: Strikethrough,
