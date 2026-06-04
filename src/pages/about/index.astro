@@ -4,10 +4,6 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import BrandIcon from '../../components/BrandIcon.astro';
 import '../../styles/about.css';
 import { getThemeSettings, type SiteSocialIconKey } from '../../lib/theme-settings';
-import {
-  resolveAboutFriendApply,
-  resolveAboutFriends
-} from '../../lib/about-page';
 
 const entry = await getEntry('about', 'index');
 if (!entry) {
@@ -19,7 +15,6 @@ const { settings } = getThemeSettings();
 const resolvedSocialItems = settings.site.socialLinks.resolvedSocialItems.filter((item) => item.visible);
 const aboutTitle = settings.page.about.title || '关于';
 const aboutSubtitle = settings.page.about.subtitle;
-const base = import.meta.env.BASE_URL ?? '/';
 
 type ContactItem = {
   key: string;
@@ -38,9 +33,6 @@ const formatExternalLabel = (href: string): string => {
   }
 };
 
-const getAvatarLetter = (name: string): string =>
-  Array.from(name.trim())[0] ?? '友';
-
 const contactItems: ContactItem[] = [
   ...resolvedSocialItems.map((item) => ({
     key: item.id,
@@ -49,12 +41,6 @@ const contactItems: ContactItem[] = [
     text: item.id === 'email' ? item.href.replace(/^mailto:/i, '') : formatExternalLabel(item.href)
   }))
 ];
-
-const friends = resolveAboutFriends(entry.data.friends ?? [], base);
-const hasFriendAvatars = friends.some((friend) => friend.avatarSrc);
-const friendApply = resolveAboutFriendApply(entry.data.friendApply);
-const faqItems = entry.data.faq ?? [];
-const contactNote = entry.data.contactNote ?? '';
 ---
 
 <BaseLayout
@@ -85,107 +71,22 @@ const contactNote = entry.data.contactNote ?? '';
   </div>
 
   {
-    friends.length ? (
-      <section class="about-section about-friends" aria-labelledby="about-friends-title">
-        <div class="about-section-head">
-          <div class="about-section-title-row">
-            <h2 id="about-friends-title" class="section-title about-section-title">{entry.data.friendsTitle}</h2>
-            {friendApply ? (
-              <a class="friend-apply-link" href={friendApply.href}>{friendApply.label}</a>
-            ) : null}
-          </div>
-          {entry.data.friendsDescription ? (
-            <p class="about-section-description">{entry.data.friendsDescription}</p>
-          ) : null}
-        </div>
-
-        <ul class="friend-list">
-          {friends.map((friend) => (
-            <li>
-              <a class="friend-card" href={friend.url}>
-                <span
-                  class:list={[
-                    'friend-card__avatar',
-                    friend.avatarSrc && 'friend-card__avatar--image'
-                  ]}
-                  aria-hidden="true"
-                  data-friend-avatar
-                >
-                  {friend.avatarSrc ? (
-                    <img
-                      src={friend.avatarSrc}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      data-friend-avatar-image
-                    />
-                  ) : null}
-                  <span class="friend-card__avatar-text">{getAvatarLetter(friend.name)}</span>
-                </span>
-                <span class="friend-card__body">
-                  <span class="friend-card__name">{friend.name}</span>
-                  {friend.description ? (
-                    <span class="friend-card__description">{friend.description}</span>
-                  ) : null}
-                </span>
-              </a>
-            </li>
-          ))}
-        </ul>
-
-      </section>
-    ) : null
-  }
-
-  {
-    faqItems.length ? (
-      <section class="about-section about-faq" aria-labelledby="about-faq-title">
-        <h2 id="about-faq-title" class="section-title about-section-title">常见问题</h2>
-        <div class="qa-list" aria-label="常见问题">
-          {faqItems.map((item) => (
-            <details class="qa-item">
-              <summary class="qa-question"><span class="qa-icon" aria-hidden="true">Q</span>{item.question}</summary>
-              <p class="qa-answer">{item.answer}</p>
-            </details>
-          ))}
-        </div>
-      </section>
-    ) : null
-  }
-
-  {
-    contactNote || contactItems.length ? (
+    contactItems.length ? (
       <section class="about-section about-contact" aria-labelledby="about-contact-title">
         <h2 id="about-contact-title" class="section-title about-section-title">联系与订阅</h2>
         <div class="contact-block" aria-label="联系方式">
-          {contactNote ? <p class="contact-note">{contactNote}</p> : null}
-          {
-            contactItems.length ? (
-              <ul class="contact-list">
-                {contactItems.map((item) => (
-                  <li>
-                    <span class="contact-link-head" aria-hidden="true">
-                      <BrandIcon name={item.icon} class="contact-icon" />
-                    </span>
-                    <a href={item.href}>{item.text}</a>
-                  </li>
-                ))}
-              </ul>
-            ) : null
-          }
+          <ul class="contact-list">
+            {contactItems.map((item) => (
+              <li>
+                <span class="contact-link-head" aria-hidden="true">
+                  <BrandIcon name={item.icon} class="contact-icon" />
+                </span>
+                <a href={item.href}>{item.text}</a>
+              </li>
+            ))}
+          </ul>
         </div>
       </section>
     ) : null
   }
-
-  {hasFriendAvatars ? (
-    <script>
-      document.querySelectorAll<HTMLImageElement>('[data-friend-avatar-image]').forEach((image) => {
-        image.addEventListener('error', () => {
-          image.closest<HTMLElement>('[data-friend-avatar]')?.classList.remove('friend-card__avatar--image');
-          image.remove();
-        }, { once: true });
-      });
-    </script>
-  ) : null}
 </BaseLayout>

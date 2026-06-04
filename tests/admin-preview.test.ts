@@ -213,4 +213,105 @@ describe('admin preview api', () => {
     );
   });
 
+  it('renders about markdown-first preview with friend and FAQ directives', async () => {
+    const { POST } = await import('../src/pages/api/admin/preview');
+
+    const response = await POST({
+      request: createJsonRequest('http://127.0.0.1:4321/api/admin/preview', {
+        collection: 'about',
+        entryId: 'index',
+        source: [
+          '## Hello',
+          '',
+          'about body',
+          '',
+          ':::friend{name="Alice" url="https://alice.example" avatar="friends/alice.webp"}',
+          'Engineer',
+          ':::',
+          '',
+          ':::friend{name="Unsafe" url="javascript:alert(1)" avatar="http://bad.example/a.webp"}',
+          'Should not render as a card.',
+          ':::',
+          '',
+          ':::faq{question="能编辑吗？"}',
+          '可以。',
+          ':::'
+        ].join('\n')
+      }),
+      url: new URL('http://127.0.0.1:4321/api/admin/preview')
+    } as never);
+
+    expect(response.status).toBe(200);
+    const payload = JSON.parse(await response.text());
+    expect(payload.ok).toBe(true);
+    expect(payload.result.collection).toBe('about');
+    expect(payload.result.html).toContain('<h2 data-admin-outline-key=');
+    expect(payload.result.html).toContain('about body');
+    expect(payload.result.html).toContain('<ul class="friend-list">');
+    expect(payload.result.html).toContain('class="friend-card"');
+    expect(payload.result.html).toContain('href="https://alice.example/"');
+    expect(payload.result.html).toContain('src="/friends/alice.webp"');
+    expect(payload.result.html).toContain('Engineer');
+    expect(payload.result.html).toContain('<div class="qa-list" aria-label="常见问题">');
+    expect(payload.result.html).toContain('<summary class="qa-question">');
+    expect(payload.result.html).toContain('能编辑吗？');
+    expect(payload.result.html).not.toContain('javascript:alert');
+    expect(payload.result.html).not.toContain('http://bad.example');
+  });
+
+  it('keeps about-only directives out of essay and memo preview rendering', async () => {
+    const { renderAdminMarkdownPreview } = await import('../src/lib/admin-console/preview');
+    const source = [
+      ':::faq{question="Should not become about FAQ"}',
+      'Answer',
+      ':::'
+    ].join('\n');
+
+    const [essayResult, memoResult] = await Promise.all([
+      renderAdminMarkdownPreview({ collection: 'essay', source }),
+      renderAdminMarkdownPreview({ collection: 'memo', entryId: 'index', source })
+    ]);
+
+    for (const result of [essayResult, memoResult]) {
+      expect(result.html).not.toContain('qa-list');
+      expect(result.html).not.toContain('qa-item');
+      expect(result.html).not.toContain('qa-question');
+      expect(result.html).toContain('Answer');
+    }
+  });
+
+  it('requires fixed about entryId for markdown-first preview', async () => {
+    const { POST } = await import('../src/pages/api/admin/preview');
+
+    const basePayload = {
+      collection: 'about',
+      source: 'about body'
+    };
+
+    const missingResponse = await POST({
+      request: createJsonRequest('http://127.0.0.1:4321/api/admin/preview', basePayload),
+      url: new URL('http://127.0.0.1:4321/api/admin/preview')
+    } as never);
+    expect(missingResponse.status).toBe(400);
+    expect(JSON.parse(await missingResponse.text()).issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'entryId' })
+      ])
+    );
+
+    const wrongResponse = await POST({
+      request: createJsonRequest('http://127.0.0.1:4321/api/admin/preview', {
+        ...basePayload,
+        entryId: 'other'
+      }),
+      url: new URL('http://127.0.0.1:4321/api/admin/preview')
+    } as never);
+    expect(wrongResponse.status).toBe(400);
+    expect(JSON.parse(await wrongResponse.text()).issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: 'entryId' })
+      ])
+    );
+  });
+
 });

@@ -11,6 +11,8 @@ export type AdminContentCollectionCapability = {
   consoleSectionHref: string;
   fixedPage: AdminContentFixedPageCapability | null;
   visible: boolean;
+  // Entry API write contract; active editor UI exposure is still controlled by writable.
+  entryWritable: boolean;
   writable: boolean;
   exportable: boolean;
   deletable: boolean;
@@ -35,6 +37,7 @@ export const ADMIN_CONTENT_COLLECTION_CAPABILITIES = {
     consoleSectionHref: '/essay/',
     fixedPage: null,
     visible: true,
+    entryWritable: true,
     writable: true,
     exportable: true,
     deletable: true,
@@ -55,6 +58,7 @@ export const ADMIN_CONTENT_COLLECTION_CAPABILITIES = {
     consoleSectionHref: '/bits/',
     fixedPage: null,
     visible: true,
+    entryWritable: true,
     writable: true,
     exportable: true,
     deletable: true,
@@ -78,6 +82,7 @@ export const ADMIN_CONTENT_COLLECTION_CAPABILITIES = {
       sourcePath: 'src/content/memo/index.md'
     },
     visible: true,
+    entryWritable: true,
     writable: true,
     exportable: true,
     deletable: false,
@@ -101,9 +106,8 @@ export const ADMIN_CONTENT_COLLECTION_CAPABILITIES = {
       sourcePath: 'src/content/about/index.md'
     },
     visible: true,
-    // PR1 only prepares the fixed-page capability and list/source contract.
-    // The structured about write plan and editor workspace are enabled in the next PR.
-    writable: false,
+    entryWritable: true,
+    writable: true,
     exportable: true,
     deletable: false,
     create: false,
@@ -114,7 +118,7 @@ export const ADMIN_CONTENT_COLLECTION_CAPABILITIES = {
     bodyImageUpload: false,
     imageUpload: false,
     imagePicker: false,
-    readonlyReason: 'about 固定页编辑器尚未接入；当前仅支持从 Content Console 查看与导出源文件',
+    readonlyReason: null,
     deleteUnsupportedReason: 'about 是固定单页内容，不支持从 Content Console 删除'
   }
 } as const satisfies Record<AdminContentCollectionKey, AdminContentCollectionCapability>;
@@ -127,6 +131,7 @@ type CollectionKeysWithCapability<Capability extends keyof AdminContentCollectio
 }[AdminContentCollectionKey];
 
 export type AdminContentWriteCollectionKey = CollectionKeysWithCapability<'writable'>;
+export type AdminContentEntryWriteCollectionKey = CollectionKeysWithCapability<'entryWritable'>;
 export type AdminContentBodyImageUploadCollectionKey = CollectionKeysWithCapability<'bodyImageUpload'>;
 export type AdminContentImageUploadCollectionKey = CollectionKeysWithCapability<'imageUpload'>;
 export type AdminContentDeletableCollectionKey = CollectionKeysWithCapability<'deletable'>;
@@ -135,6 +140,10 @@ export type AdminContentExportableCollectionKey = CollectionKeysWithCapability<'
 export const ADMIN_CONTENT_WRITE_COLLECTION_KEYS = ADMIN_CONTENT_COLLECTION_KEYS
   .filter((collection): collection is AdminContentWriteCollectionKey =>
     ADMIN_CONTENT_COLLECTION_CAPABILITIES[collection].writable);
+
+export const ADMIN_CONTENT_ENTRY_WRITE_COLLECTION_KEYS = ADMIN_CONTENT_COLLECTION_KEYS
+  .filter((collection): collection is AdminContentEntryWriteCollectionKey =>
+    ADMIN_CONTENT_COLLECTION_CAPABILITIES[collection].entryWritable);
 
 export const ADMIN_CONTENT_BODY_IMAGE_UPLOAD_COLLECTION_KEYS = ADMIN_CONTENT_COLLECTION_KEYS
   .filter((collection): collection is AdminContentBodyImageUploadCollectionKey =>
@@ -167,6 +176,9 @@ export const isAdminContentCollectionKey = (value: string): value is AdminConten
 
 export const isAdminContentWriteCollectionKey = (value: string): value is AdminContentWriteCollectionKey =>
   isAdminContentCollectionKey(value) && getAdminContentCollectionCapability(value).writable;
+
+export const isAdminContentEntryWriteCollectionKey = (value: string): value is AdminContentEntryWriteCollectionKey =>
+  isAdminContentCollectionKey(value) && getAdminContentCollectionCapability(value).entryWritable;
 
 export const isAdminContentBodyImageUploadCollectionKey = (value: string): value is AdminContentBodyImageUploadCollectionKey =>
   isAdminContentCollectionKey(value) && getAdminContentCollectionCapability(value).bodyImageUpload;

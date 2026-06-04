@@ -26,10 +26,12 @@ const defaultSettingsDir = path.join(projectRoot, 'src', 'data', 'settings');
 const ADMIN_CONTENT_SMOKE_ENTRY_ID = 'admin-console-guide';
 const ADMIN_CONTENT_BITS_SMOKE_ENTRY_ID = 'preview-admin-bit';
 const ADMIN_CONTENT_MEMO_SMOKE_ENTRY_ID = 'index';
+const ADMIN_CONTENT_ABOUT_SMOKE_ENTRY_ID = 'index';
 const ADMIN_CONTENT_SMOKE_INITIAL_TITLE = 'Admin Content HTTP Smoke';
 const ADMIN_CONTENT_SMOKE_UPDATED_TITLE = 'Admin Content HTTP Smoke Updated';
 const ADMIN_CONTENT_BITS_SMOKE_INITIAL_TITLE = 'Admin Bits HTTP Smoke';
 const ADMIN_CONTENT_MEMO_SMOKE_INITIAL_TITLE = 'Admin Memo HTTP Smoke';
+const ADMIN_CONTENT_ABOUT_SMOKE_BODY_MARKER = 'Admin About HTTP Smoke';
 const previewHost = '127.0.0.1';
 const ADMIN_BOOTSTRAP_XSS_SENTINEL = '__ADMIN_BOOTSTRAP_XSS_SENTINEL__';
 const ADMIN_BOOTSTRAP_BREAKOUT_PAYLOAD = `</script><script>window.${ADMIN_BOOTSTRAP_XSS_SENTINEL}=1</script>`;
@@ -136,19 +138,40 @@ const createAdminMemoSmokeSource = () => [
   ''
 ].join('\n');
 
+const createAdminAboutSmokeSource = () => [
+  '---',
+  '---',
+  '',
+  `## ${ADMIN_CONTENT_ABOUT_SMOKE_BODY_MARKER}`,
+  '',
+  'Initial about body.',
+  '',
+  ':::friend{name="Alice" url="https://alice.example/"}',
+  'Engineer',
+  ':::',
+  '',
+  ':::faq{question="About smoke?"}',
+  'Yes.',
+  ':::',
+  ''
+].join('\n');
+
 const createTempAdminDevFixture = async () => {
   const tempRoot = await mkdtemp(path.join(tmpdir(), 'astro-whono-admin-dev-'));
   const settingsDir = path.join(tempRoot, 'settings');
   const contentEntryPath = path.join(tempRoot, 'src', 'content', 'essay', `${ADMIN_CONTENT_SMOKE_ENTRY_ID}.md`);
   const bitsEntryPath = path.join(tempRoot, 'src', 'content', 'bits', `${ADMIN_CONTENT_BITS_SMOKE_ENTRY_ID}.md`);
   const memoEntryPath = path.join(tempRoot, 'src', 'content', 'memo', `${ADMIN_CONTENT_MEMO_SMOKE_ENTRY_ID}.md`);
+  const aboutEntryPath = path.join(tempRoot, 'src', 'content', 'about', `${ADMIN_CONTENT_ABOUT_SMOKE_ENTRY_ID}.md`);
   await cp(defaultSettingsDir, settingsDir, { recursive: true });
   await mkdir(path.dirname(contentEntryPath), { recursive: true });
   await mkdir(path.dirname(bitsEntryPath), { recursive: true });
   await mkdir(path.dirname(memoEntryPath), { recursive: true });
+  await mkdir(path.dirname(aboutEntryPath), { recursive: true });
   await writeFile(contentEntryPath, createAdminContentSmokeSource(), 'utf8');
   await writeFile(bitsEntryPath, createAdminBitsSmokeSource(), 'utf8');
   await writeFile(memoEntryPath, createAdminMemoSmokeSource(), 'utf8');
+  await writeFile(aboutEntryPath, createAdminAboutSmokeSource(), 'utf8');
 
   return {
     tempRoot,
@@ -156,6 +179,7 @@ const createTempAdminDevFixture = async () => {
     contentEntryPath,
     bitsEntryPath,
     memoEntryPath,
+    aboutEntryPath,
     cleanup: () => rm(tempRoot, { recursive: true, force: true })
   };
 };
@@ -585,6 +609,78 @@ const runDevAdminMemoContentWriteSmoke = async (baseUrl, fixture) => {
   );
 };
 
+const runDevAdminAboutContentWriteSmoke = async (baseUrl, fixture) => {
+  const beforeSave = await readFile(fixture.aboutEntryPath, 'utf8');
+  const initialRevision = hashSourceText(beforeSave);
+  const payload = await getDevContentEntryPayload(
+    baseUrl,
+    'about',
+    ADMIN_CONTENT_ABOUT_SMOKE_ENTRY_ID,
+    initialRevision
+  );
+  expect(
+    payload.values && typeof payload.values === 'object' && Object.keys(payload.values).length === 0,
+    'Dev About Content GET should return empty body-only values'
+  );
+
+  const nextBody = [
+    '## Updated about body',
+    '',
+    'Updated about body through the real dev HTTP content write smoke.',
+    '',
+    ':::friend{name="Alice" url="https://alice.example/"}',
+    'Updated engineer',
+    ':::',
+    '',
+    ':::faq{question="About smoke updated?"}',
+    'Yes, through Content Console.',
+    ':::',
+    ''
+  ].join('\n');
+  const saveResponse = await request(
+    baseUrl,
+    '/api/admin/content/entry/',
+    createJsonRequestInit(baseUrl, {
+      collection: 'about',
+      entryId: ADMIN_CONTENT_ABOUT_SMOKE_ENTRY_ID,
+      revision: payload.revision,
+      body: nextBody
+    })
+  );
+
+  expect(saveResponse.status === 200, `Dev POST about /api/admin/content/entry/ returned ${saveResponse.status}`);
+  expect(saveResponse.json?.ok === true, 'Dev About Content write did not succeed');
+  expect(saveResponse.json?.result?.changed === true, 'Dev About Content write did not report changes');
+  expect(saveResponse.json?.result?.written === true, 'Dev About Content write did not mark written=true');
+  expect(
+    Array.isArray(saveResponse.json?.result?.changedFields)
+      && saveResponse.json.result.changedFields.length === 1
+      && saveResponse.json.result.changedFields[0] === 'body',
+    'Dev About Content write should only report a body change'
+  );
+  expect(
+    saveResponse.json?.payload?.bodyText === nextBody,
+    'Dev About Content write did not return the updated body'
+  );
+  expect(
+    saveResponse.json?.payload?.values
+      && Object.keys(saveResponse.json.payload.values).length === 0,
+    'Dev About Content write should return empty body-only values'
+  );
+
+  const afterSave = await readFile(fixture.aboutEntryPath, 'utf8');
+  expect(afterSave !== beforeSave, 'Dev About Content write did not update the source file');
+  expect(afterSave.includes(':::friend{name="Alice" url="https://alice.example/"}'), 'Dev About Content write did not persist friend directive');
+  expect(afterSave.includes(':::faq{question="About smoke updated?"}'), 'Dev About Content write did not persist FAQ directive');
+  expect(afterSave.startsWith('---\n---\n'), 'Dev About Content write should keep an empty about frontmatter block');
+  expect(afterSave.endsWith(nextBody), 'Dev About Content write persisted an unexpected body');
+  expect(
+    saveResponse.json?.payload?.revision === hashSourceText(afterSave)
+      && saveResponse.json.payload.revision !== initialRevision,
+    'Dev About Content write did not return a fresh revision'
+  );
+};
+
 const stopProcess = async (child) => {
   if (!child || child.exitCode !== null) return;
 
@@ -623,6 +719,7 @@ export const runPreviewAdminBoundaryCheck = async () => {
     const adminThemeResponse = await request(baseUrl, '/admin/theme/');
     const adminContentResponse = await request(baseUrl, '/admin/content/');
     const adminEssayContentEditResponse = await request(baseUrl, '/admin/content/essay/_edit/admin-console-guide/');
+    const adminAboutContentEditResponse = await request(baseUrl, '/admin/content/about/_edit/index/');
     const adminImageResponse = await request(baseUrl, '/admin/images/');
     const adminChecksResponse = await request(baseUrl, '/admin/checks/');
     const adminDataResponse = await request(baseUrl, '/admin/data/');
@@ -699,6 +796,7 @@ export const runPreviewAdminBoundaryCheck = async () => {
     assertReadonlyAdminThemeShell('Preview GET /admin/theme/', adminThemeResponse);
     assertAdminContentPlaceholderShell('Preview GET /admin/content/', adminContentResponse);
     assertAdminContentEditStaticMissing('Preview GET /admin/content/essay/_edit/admin-console-guide/', adminEssayContentEditResponse);
+    assertAdminContentEditStaticMissing('Preview GET /admin/content/about/_edit/index/', adminAboutContentEditResponse);
     assertReadonlyAdminImageShell('Preview GET /admin/images/', adminImageResponse);
     assertReadonlyAdminChecksShell('Preview GET /admin/checks/', adminChecksResponse);
     assertReadonlyAdminDataShell('Preview GET /admin/data/', adminDataResponse);
@@ -773,6 +871,10 @@ export const runDevAdminSettingsSmokeCheck = async () => {
       baseUrl,
       `/admin/content/memo/_edit/${ADMIN_CONTENT_MEMO_SMOKE_ENTRY_ID}/`
     );
+    const contentAboutEditResponse = await request(
+      baseUrl,
+      `/admin/content/about/_edit/${ADMIN_CONTENT_ABOUT_SMOKE_ENTRY_ID}/`
+    );
     assertAdminContentOverviewDevShell('Dev GET /admin/content/', contentOverviewResponse);
     assertAdminContentEditDevShell('Dev GET /admin/content/essay/_edit/admin-console-guide/', contentEssayEditResponse, 'essay');
     assertAdminContentEditDevShell(
@@ -785,9 +887,19 @@ export const runDevAdminSettingsSmokeCheck = async () => {
       contentMemoEditResponse,
       'memo'
     );
+    assertAdminContentEditDevShell(
+      `Dev GET /admin/content/about/_edit/${ADMIN_CONTENT_ABOUT_SMOKE_ENTRY_ID}/`,
+      contentAboutEditResponse,
+      'about'
+    );
+    expect(
+      contentAboutEditResponse.body.includes('data-admin-about-editor-island'),
+      'Dev About edit page should emit the about editor island marker'
+    );
     await runDevAdminContentWriteSmoke(baseUrl, fixture);
     await runDevAdminBitsContentWriteSmoke(baseUrl, fixture);
     await runDevAdminMemoContentWriteSmoke(baseUrl, fixture);
+    await runDevAdminAboutContentWriteSmoke(baseUrl, fixture);
 
     const uiSettingsPath = path.join(fixture.settingsDir, 'ui.json');
     const beforeDryRun = await readFile(uiSettingsPath, 'utf8');

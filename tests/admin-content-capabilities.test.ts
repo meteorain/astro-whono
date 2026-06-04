@@ -3,6 +3,7 @@ import {
   ADMIN_CONTENT_BODY_IMAGE_UPLOAD_COLLECTION_KEYS,
   ADMIN_CONTENT_COLLECTION_KEYS,
   ADMIN_CONTENT_DELETABLE_COLLECTION_KEYS,
+  ADMIN_CONTENT_ENTRY_WRITE_COLLECTION_KEYS,
   ADMIN_CONTENT_EXPORTABLE_COLLECTION_KEYS,
   ADMIN_CONTENT_IMAGE_UPLOAD_COLLECTION_KEYS,
   ADMIN_CONTENT_WRITE_COLLECTION_KEYS,
@@ -10,6 +11,7 @@ import {
   getAdminContentFixedPageCapability,
   isAdminContentBodyImageUploadCollectionKey,
   isAdminContentDeletableCollectionKey,
+  isAdminContentEntryWriteCollectionKey,
   isAdminContentExportableCollectionKey,
   isAdminContentImageUploadCollectionKey,
   isAdminContentWriteCollectionKey
@@ -20,18 +22,20 @@ import {
 } from '../src/lib/admin-console/content';
 
 describe('admin content collection capabilities', () => {
-  it('keeps about visible and exportable without entering write/delete/upload capabilities', () => {
+  it('keeps about fixed-page writable without entering delete/upload capabilities', () => {
     expect(ADMIN_CONTENT_COLLECTION_KEYS).toEqual(['essay', 'bits', 'memo', 'about']);
     expect(ADMIN_CONTENT_COLLECTIONS).toEqual(['essay', 'bits', 'memo', 'about']);
     expect(ADMIN_CONTENT_SCOPE_OPTIONS.map((option) => option.value)).toEqual(['all', 'essay', 'bits', 'memo', 'about']);
 
-    expect(ADMIN_CONTENT_WRITE_COLLECTION_KEYS).toEqual(['essay', 'bits', 'memo']);
+    expect(ADMIN_CONTENT_ENTRY_WRITE_COLLECTION_KEYS).toEqual(['essay', 'bits', 'memo', 'about']);
+    expect(ADMIN_CONTENT_WRITE_COLLECTION_KEYS).toEqual(['essay', 'bits', 'memo', 'about']);
     expect(ADMIN_CONTENT_DELETABLE_COLLECTION_KEYS).toEqual(['essay', 'bits']);
     expect(ADMIN_CONTENT_IMAGE_UPLOAD_COLLECTION_KEYS).toEqual(['essay', 'bits', 'memo']);
     expect(ADMIN_CONTENT_BODY_IMAGE_UPLOAD_COLLECTION_KEYS).toEqual(['essay', 'memo']);
     expect(ADMIN_CONTENT_EXPORTABLE_COLLECTION_KEYS).toEqual(['essay', 'bits', 'memo', 'about']);
 
-    expect(isAdminContentWriteCollectionKey('about')).toBe(false);
+    expect(isAdminContentEntryWriteCollectionKey('about')).toBe(true);
+    expect(isAdminContentWriteCollectionKey('about')).toBe(true);
     expect(isAdminContentDeletableCollectionKey('about')).toBe(false);
     expect(isAdminContentImageUploadCollectionKey('about')).toBe(false);
     expect(isAdminContentBodyImageUploadCollectionKey('about')).toBe(false);
@@ -44,7 +48,8 @@ describe('admin content collection capabilities', () => {
     expect(getAdminContentCollectionCapability('about')).toMatchObject({
       label: '关于',
       visible: true,
-      writable: false,
+      entryWritable: true,
+      writable: true,
       exportable: true,
       deletable: false,
       create: false,

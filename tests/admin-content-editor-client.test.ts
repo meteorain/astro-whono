@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { saveContentEntry } from '../src/components/admin/editor/content-editor-client';
+import {
+  renderContentPreview,
+  saveContentEntry
+} from '../src/components/admin/editor/content-editor-client';
 import type { AdminBitsEditorValues } from '../src/lib/admin-console/content-shared';
 
 const bitsValues: AdminBitsEditorValues = {
@@ -14,6 +17,55 @@ const bitsValues: AdminBitsEditorValues = {
 };
 
 describe('content editor client', () => {
+  it('sends body-only payloads for about saves', async () => {
+    const requested = {
+      body: null as unknown
+    };
+    const fetchImpl = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+      requested.body = JSON.parse(String(init?.body ?? '{}')) as unknown;
+      return new Response(JSON.stringify({
+        ok: true,
+        result: {
+          changed: true,
+          written: true,
+          changedFields: ['body'],
+          relativePath: 'src/content/about/index.md'
+        },
+        payload: {
+          collection: 'about',
+          entryId: 'index',
+          publicEntryId: 'index',
+          defaultPublicSlug: 'index',
+          revision: 'next-rev',
+          relativePath: 'src/content/about/index.md',
+          writable: true,
+          readonlyReason: null,
+          bodyText: 'About body',
+          values: {}
+        }
+      }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }) as typeof fetch;
+
+    await saveContentEntry({
+      endpoint: '/api/admin/content/entry/',
+      collection: 'about',
+      entryId: 'index',
+      revision: 'rev',
+      body: 'About body',
+      fetchImpl
+    });
+
+    expect(requested.body).toEqual({
+      collection: 'about',
+      entryId: 'index',
+      revision: 'rev',
+      body: 'About body'
+    });
+  });
+
   it('keeps dry-run as a URL flag instead of changing the save payload', async () => {
     const requested = {
       url: '',
@@ -97,5 +149,32 @@ describe('content editor client', () => {
       ...bitsValues,
       title: 'External title'
     });
+  });
+
+  it('preserves preview warnings from successful preview payloads', async () => {
+    const fetchImpl = (async () => new Response(JSON.stringify({
+      ok: true,
+      result: {
+        html: '<p>Preview</p>',
+        warnings: ['图片路径可能无法解析'],
+        elapsedMs: 3,
+        codeHighlight: 'shiki-rehype'
+      }
+    }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    })) as typeof fetch;
+
+    const outcome = await renderContentPreview({
+      endpoint: '/api/admin/preview/',
+      collection: 'bits',
+      entryId: 'demo',
+      source: 'body',
+      fetchImpl
+    });
+
+    expect(outcome.responseOk).toBe(true);
+    expect(outcome.payloadOk).toBe(true);
+    expect(outcome.result?.warnings).toEqual(['图片路径可能无法解析']);
   });
 });

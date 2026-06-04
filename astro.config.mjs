@@ -13,12 +13,21 @@ import {
   rehypeRestoreMarkdownMathBoundary
 } from './src/plugins/rehype-markdown-math-boundary.mjs';
 import remarkCallout from './src/plugins/remark-callout.mjs';
+import { rehypeAboutDirectives, remarkAboutDirectives } from './src/plugins/about-directives.mjs';
 import { sanitizeSchema } from './src/plugins/sanitize-schema.mjs';
 import shikiToolbar from './src/plugins/shiki-toolbar.mjs';
 import { site, hasSiteUrl } from './site.config.mjs';
 
 const isProductionBuild = process.env.NODE_ENV === 'production';
 const SITEMAP_ROUTE_ROOTS = new Set(['about', 'admin', 'archive', 'bits', 'checks', 'essay', 'memo']);
+const rawDeploymentBase = process.env.ASTRO_WHONO_BASE_PATH ?? '/';
+
+const normalizeDeploymentBase = (value) => {
+  const segment = String(value ?? '').trim().replace(/^\/+|\/+$/g, '');
+  return segment ? `/${segment}/` : '/';
+};
+
+const deploymentBase = normalizeDeploymentBase(rawDeploymentBase);
 
 const normalizeSitemapPathname = (page) => {
   let pathname = '/';
@@ -57,6 +66,7 @@ const integrations = [
 export default defineConfig({
   // Required for RSS generation. Prefer SITE_URL; fallback keeps build passing.
   site: site.url,
+  base: deploymentBase,
   // DEV 使用 server output 允许 Theme Console 的 /api/admin/settings/ 处理读写；
   // 构建阶段回到 static，让 /admin/ 保持只读提示，并避免把该路径当作生产公开 API。
   output: isProductionBuild ? 'static' : 'server',
@@ -76,12 +86,13 @@ export default defineConfig({
     }
   },
   markdown: {
-    remarkPlugins: [[remarkMath, { singleDollarTextMath: false }], remarkDirective, remarkCallout],
+    remarkPlugins: [[remarkMath, { singleDollarTextMath: false }], remarkDirective, remarkAboutDirectives, remarkCallout],
     // Only double-dollar syntax from remark-math may reach KaTeX; raw HTML math classes are scrubbed.
     rehypePlugins: [
       rehypeProtectMarkdownMath,
       [rehypeRaw, markdownMathRawOptions],
       rehypeRestoreMarkdownMathBoundary,
+      [rehypeAboutDirectives, { base: deploymentBase }],
       [rehypeSanitize, sanitizeSchema],
       rehypeKatex
     ],

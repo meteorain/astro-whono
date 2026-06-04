@@ -2,8 +2,9 @@ import type { AdminContentWriteCollectionKey } from '../../lib/admin-console/con
 import { getAdminContentCollectionCapability } from '../../lib/admin-console/content-collections';
 import { getAdminContentEntryEditHref } from '../../lib/admin-console/content-routes';
 import {
+  type AdminAboutEditorPayload,
   type AdminBitsEditorPayload,
-  type AdminContentEditorPayload,
+  type AdminContentWorkspaceEditorPayload,
   type AdminEssayEditorPayload,
   type AdminMemoEditorPayload
 } from '../../lib/admin-console/content-shared';
@@ -19,6 +20,7 @@ import type {
   EditorOutlineListSourceItem
 } from './editor/editor-outline-helpers';
 import type { MemoEditorIslandProps } from './editor/memo-editor-island-props';
+import type { AboutEditorIslandProps } from './editor/about-editor-island-props';
 
 type WithBase = (path: string) => string;
 
@@ -33,6 +35,7 @@ export type AdminContentEditorEndpoints = {
 export type AdminContentEditorStyleSlot =
   | 'adminContentEditor'
   | 'adminImageShared'
+  | 'about'
   | 'article'
   | 'memo';
 
@@ -44,7 +47,7 @@ export type AdminContentEditorInfoTrigger = {
   panelId: string;
 };
 
-export type AdminContentEditorIslandKey = 'essay' | 'bits' | 'memo';
+export type AdminContentEditorIslandKey = 'essay' | 'bits' | 'memo' | 'about';
 
 export type AdminContentEditorOutlines = {
   essayOutlineItems: EditorOutlineEssaySourceItem[];
@@ -54,9 +57,10 @@ export type AdminContentEditorOutlines = {
 export type AdminContentEditorIslandProps =
   | EssayEditorShellProps
   | BitsEditorIslandProps
-  | MemoEditorIslandProps;
+  | MemoEditorIslandProps
+  | AboutEditorIslandProps;
 
-type BuildBaseIslandPropsInput<Payload extends AdminContentEditorPayload> = {
+type BuildBaseIslandPropsInput<Payload extends AdminContentWorkspaceEditorPayload> = {
   payload: Payload;
   endpoints: AdminContentEditorEndpoints;
   returnHref: string;
@@ -73,17 +77,20 @@ type BuildBitsIslandPropsInput = BuildBaseIslandPropsInput<AdminBitsEditorPayloa
 };
 
 type BuildMemoIslandPropsInput = BuildBaseIslandPropsInput<AdminMemoEditorPayload>;
+type BuildAboutIslandPropsInput = BuildBaseIslandPropsInput<AdminAboutEditorPayload>;
 
-type BuildIslandPropsInput<Payload extends AdminContentEditorPayload> =
+type BuildIslandPropsInput<Payload extends AdminContentWorkspaceEditorPayload> =
   Payload extends AdminEssayEditorPayload
     ? BuildEssayIslandPropsInput
     : Payload extends AdminBitsEditorPayload
       ? BuildBitsIslandPropsInput
-      : BuildMemoIslandPropsInput;
+      : Payload extends AdminAboutEditorPayload
+        ? BuildAboutIslandPropsInput
+        : BuildMemoIslandPropsInput;
 
 export type AdminContentEditorPageRegistration<
   Collection extends AdminContentWriteCollectionKey = AdminContentWriteCollectionKey,
-  Payload extends AdminContentEditorPayload = AdminContentEditorPayload
+  Payload extends AdminContentWorkspaceEditorPayload = AdminContentWorkspaceEditorPayload
 > = {
   collection: Collection;
   workspaceClassName: string;
@@ -115,6 +122,11 @@ const loadArticleStylesHref = async (): Promise<string> => {
   return articleStylesHref;
 };
 
+const loadAboutStylesHref = async (): Promise<string> => {
+  const { default: aboutStylesHref } = await import('../../styles/about.css?url');
+  return aboutStylesHref;
+};
+
 const loadMemoStylesHref = async (): Promise<string> => {
   const { default: memoStylesHref } = await import('../../styles/memo.css?url');
   return memoStylesHref;
@@ -128,6 +140,7 @@ const loadAdminImageSharedStylesHref = async (): Promise<string> => {
 const STYLE_SLOT_LOADERS = {
   adminContentEditor: loadAdminContentEditorStylesHref,
   adminImageShared: loadAdminImageSharedStylesHref,
+  about: loadAboutStylesHref,
   article: loadArticleStylesHref,
   memo: loadMemoStylesHref
 } as const satisfies Record<AdminContentEditorStyleSlot, () => Promise<string>>;
@@ -254,6 +267,20 @@ const buildMemoEditorIslandProps = ({
   initialBody: payload.bodyText
 });
 
+const buildAboutEditorIslandProps = ({
+  payload,
+  endpoints,
+  returnHref
+}: BuildAboutIslandPropsInput): AboutEditorIslandProps => ({
+  endpoint: endpoints.endpoint,
+  exportEndpoint: endpoints.exportEndpoint,
+  previewEndpoint: endpoints.previewEndpoint,
+  returnHref,
+  entryId: payload.entryId,
+  revision: payload.revision,
+  initialBody: payload.bodyText
+});
+
 const CONTENT_EDITOR_PAGE_REGISTRY = {
   essay: {
     collection: 'essay',
@@ -298,11 +325,23 @@ const CONTENT_EDITOR_PAGE_REGISTRY = {
     usesImagePicker: getAdminContentCollectionCapability('memo').imagePicker,
     resolveReturnHref: ({ collectionHref }) => collectionHref,
     buildIslandProps: buildMemoEditorIslandProps
+  },
+  about: {
+    collection: 'about',
+    workspaceClassName: 'admin-content-edit-page--about',
+    articleClassName: 'admin-content-editor--about',
+    island: 'about',
+    styleSlots: ['about', 'adminContentEditor'],
+    outlineKind: 'none',
+    infoTrigger: null,
+    usesImagePicker: getAdminContentCollectionCapability('about').imagePicker,
+    resolveReturnHref: ({ collectionHref }) => collectionHref,
+    buildIslandProps: buildAboutEditorIslandProps
   }
 } as const satisfies {
   [Collection in AdminContentWriteCollectionKey]: AdminContentEditorPageRegistration<
     Collection,
-    Extract<AdminContentEditorPayload, { collection: Collection }>
+    Extract<AdminContentWorkspaceEditorPayload, { collection: Collection }>
   >;
 };
 
@@ -324,7 +363,7 @@ export const buildAdminContentEditorIslandProps = ({
   outlines,
   initialArticleInfoOpen
 }: {
-  payload: AdminContentEditorPayload;
+  payload: AdminContentWorkspaceEditorPayload;
   endpoints: AdminContentEditorEndpoints;
   returnHref: string;
   defaultAuthor: BitsCardAuthorInput;
@@ -348,6 +387,14 @@ export const buildAdminContentEditorIslandProps = ({
       returnHref,
       defaultAuthor,
       bitsOutlineItems: outlines.bitsOutlineItems
+    });
+  }
+
+  if (payload.collection === 'about') {
+    return CONTENT_EDITOR_PAGE_REGISTRY.about.buildIslandProps({
+      payload,
+      endpoints,
+      returnHref
     });
   }
 

@@ -84,6 +84,7 @@ const bitsInlineTools = [
 type Props = {
   preset?: EditorToolbarPreset;
   busy?: boolean;
+  imageToolEnabled?: boolean;
   galleryToolEnabled?: boolean;
   outlineOpen?: boolean;
   outlineVisible?: boolean;
@@ -127,6 +128,7 @@ type Props = {
 let {
   preset = 'full',
   busy = false,
+  imageToolEnabled = true,
   galleryToolEnabled = true,
   outlineOpen = false,
   outlineVisible = outlineOpen,
@@ -188,6 +190,11 @@ const layoutControlLabel = $derived(singleViewActive ? singleViewReturnLabel : e
 const layoutControlIcon = $derived(singleViewActive ? 'undo-2' : editorLayoutToggleIcon);
 const layoutControlPressed = $derived(singleViewActive ? undefined : editorLayoutIsSplit ? 'true' : 'false');
 const markdownHighlightThemeLabel = $derived(getMarkdownHighlightThemeLabel(markdownHighlightTheme));
+const inlineMediaTools = $derived(
+  imageToolEnabled
+    ? markdownInlineMediaTools
+    : markdownInlineMediaTools.filter((tool) => tool.id !== 'image')
+);
 const displayMenuTooltipLabel = '编辑器外观';
 const displayMenuLabel = $derived(`编辑器外观：${lineNumbersEnabled ? '行号开' : '行号关'}，高亮 ${markdownHighlightThemeLabel}`);
 const displayControlPressed = $derived(
@@ -516,7 +523,7 @@ $effect(() => {
     </div>
 
     <div class="admin-editor-markdown-toolbar__group" role="group" aria-label="链接与媒体">
-      {#each preset === 'bits' ? bitsInlineTools : markdownInlineMediaTools as tool}
+      {#each preset === 'bits' ? bitsInlineTools : inlineMediaTools as tool}
         <button
           class="admin-btn admin-btn--tool admin-btn--compact admin-btn--icon admin-editor-markdown-toolbar__button"
           type="button"

@@ -6,6 +6,7 @@ import type {
   AdminContentEditorStyleSlot
 } from '../src/components/admin/admin-content-editor-registry';
 import type {
+  AdminAboutEditorPayload,
   AdminBitsEditorPayload,
   AdminEssayEditorPayload,
   AdminMemoEditorPayload
@@ -76,6 +77,19 @@ const memoPayload: AdminMemoEditorPayload = {
   }
 };
 
+const aboutPayload: AdminAboutEditorPayload = {
+  collection: 'about',
+  entryId: 'index',
+  publicEntryId: 'index',
+  defaultPublicSlug: 'index',
+  revision: 'about-rev',
+  relativePath: 'src/content/about/index.md',
+  writable: true,
+  readonlyReason: null,
+  bodyText: 'About body',
+  values: {}
+};
+
 const outlineFixture: AdminContentEditorOutlines = {
   essayOutlineItems: [
     {
@@ -141,7 +155,8 @@ describe('admin content edit dev state', () => {
 
   it.each([
     ['essay', essayPayload, ['article', 'adminContentEditor']],
-    ['memo', memoPayload, ['article', 'memo', 'adminContentEditor']]
+    ['memo', memoPayload, ['article', 'memo', 'adminContentEditor']],
+    ['about', aboutPayload, ['about', 'adminContentEditor']]
   ] as const)('uses %s registry style slots', async (_collection, payload, expectedSlots) => {
     const styleSlots: AdminContentEditorStyleSlot[] = [];
     const state = await loadAdminContentEditDevState({

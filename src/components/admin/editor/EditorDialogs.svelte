@@ -1,6 +1,6 @@
 <script lang="ts">
 import type {
-  AdminContentEditorValues,
+  AdminContentWorkspaceEditorValues,
   AdminContentBodyImageUploadCollectionKey,
   AdminContentWriteCollectionKey
 } from '../../../lib/admin-console/content-shared';
@@ -13,7 +13,7 @@ import type { ImageBlockDraft } from './image-insert-helpers';
 import type { GalleryBlockDraft } from './gallery-insert-helpers';
 
 type Props = {
-  frontmatter: AdminContentEditorValues;
+  frontmatter: AdminContentWorkspaceEditorValues;
   collection: AdminContentWriteCollectionKey;
   dialogTitle: string;
   fieldsAriaLabel: string;

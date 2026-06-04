@@ -7,6 +7,7 @@
 @import "./editor/legacy-form.css";
 @import "./editor/bits-workspace.css";
 @import "./editor/memo-workspace.css";
+@import "./editor/about-workspace.css";
 @import "./editor/bits-preview.css";
 @import "./editor/shell.css";
 @import "./editor/frontmatter.css";

@@ -24,16 +24,31 @@ import {
 } from './frontmatter';
 import { findMissingMarkdownBodyLocalImageReferences } from './essay-image-references';
 import {
+  buildAdminAboutEditorPayload,
+  buildAdminAboutWritePlan,
+  type AdminAboutEditorPayload,
+  type AdminAboutEditorValues
+} from './content-about-contract';
+import type { AdminContentValidationIssue } from './content-entry-contract';
+import {
   getAdminContentCollectionCapability,
   getAdminContentFixedPageCapability,
-  type AdminContentCollectionKey,
-  type AdminContentWriteCollectionKey
+  type AdminContentEntryWriteCollectionKey,
+  type AdminContentCollectionKey
 } from './content-collections';
+
+export type {
+  AdminAboutEditorPayload,
+  AdminAboutEditorValues
+} from './content-about-contract';
+
+export type { AdminContentValidationIssue } from './content-entry-contract';
 
 export {
   ADMIN_CONTENT_COLLECTION_KEYS,
   ADMIN_CONTENT_BODY_IMAGE_UPLOAD_COLLECTION_KEYS,
   ADMIN_CONTENT_DELETABLE_COLLECTION_KEYS,
+  ADMIN_CONTENT_ENTRY_WRITE_COLLECTION_KEYS,
   ADMIN_CONTENT_EXPORTABLE_COLLECTION_KEYS,
   ADMIN_CONTENT_IMAGE_UPLOAD_COLLECTION_KEYS,
   ADMIN_CONTENT_WRITE_COLLECTION_KEYS,
@@ -42,6 +57,7 @@ export {
   isAdminContentBodyImageUploadCollectionKey,
   isAdminContentCollectionKey,
   isAdminContentDeletableCollectionKey,
+  isAdminContentEntryWriteCollectionKey,
   isAdminContentExportableCollectionKey,
   isAdminContentImageUploadCollectionKey,
   isAdminContentWriteCollectionKey
@@ -49,6 +65,7 @@ export {
 export type {
   AdminContentBodyImageUploadCollectionKey,
   AdminContentCollectionKey,
+  AdminContentEntryWriteCollectionKey,
   AdminContentExportableCollectionKey,
   AdminContentImageUploadCollectionKey,
   AdminContentWriteCollectionKey
@@ -65,11 +82,6 @@ export class AdminContentEntryResolutionError extends Error {
     this.code = code;
   }
 }
-
-export type AdminContentValidationIssue = {
-  path: string;
-  message: string;
-};
 
 type FrontmatterTextReadResult =
   | { status: 'done'; frontmatterText: string | null }
@@ -111,7 +123,14 @@ export type AdminMemoEditorValues = {
 export type AdminContentEditorValues =
   | AdminEssayEditorValues
   | AdminBitsEditorValues
-  | AdminMemoEditorValues;
+  | AdminMemoEditorValues
+  | AdminAboutEditorValues;
+
+export type AdminContentWorkspaceEditorValues =
+  | AdminEssayEditorValues
+  | AdminBitsEditorValues
+  | AdminMemoEditorValues
+  | AdminAboutEditorValues;
 
 export type AdminEssayEditorPayload = {
   collection: 'essay';
@@ -155,7 +174,14 @@ export type AdminMemoEditorPayload = {
 export type AdminContentEditorPayload =
   | AdminEssayEditorPayload
   | AdminBitsEditorPayload
-  | AdminMemoEditorPayload;
+  | AdminMemoEditorPayload
+  | AdminAboutEditorPayload;
+
+export type AdminContentWorkspaceEditorPayload =
+  | AdminEssayEditorPayload
+  | AdminBitsEditorPayload
+  | AdminMemoEditorPayload
+  | AdminAboutEditorPayload;
 
 type AdminEssayFrontmatter = {
   title: string;
@@ -192,7 +218,7 @@ type AdminBitsFrontmatter = {
   images?: AdminBitsImage[];
 };
 
-type AdminContentSourceState = {
+export type AdminContentSourceState = {
   collection: AdminContentCollectionKey;
   entryId: string;
   publicEntryId: string;
@@ -679,7 +705,7 @@ const validateEssayPublicSlug = async (
   return issues;
 };
 
-const loadAdminContentSourceState = async (
+export const loadAdminContentSourceState = async (
   collection: AdminContentCollectionKey,
   entryId: string
 ): Promise<AdminContentSourceState> => {
@@ -757,19 +783,10 @@ const toMemoEditorValues = (state: AdminContentSourceState): AdminMemoEditorValu
 export const getAdminContentReadOnlyReason = (collection: AdminContentCollectionKey): string | null =>
   getAdminContentCollectionCapability(collection).readonlyReason;
 
-export const readAdminContentEntryEditorPayload = async (
-  collection: AdminContentWriteCollectionKey,
-  entryId: string
-): Promise<AdminContentEditorPayload> => {
-  if (!getAdminContentCollectionCapability(collection).writable) {
-    throw new AdminContentEntryResolutionError(
-      'invalid-entry-id',
-      getAdminContentReadOnlyReason(collection) ?? `当前 collection 暂不支持写盘：${collection}`
-    );
-  }
-
-  const state = await loadAdminContentSourceState(collection, entryId);
-
+export const buildAdminContentEntryEditorPayloadFromState = (
+  state: AdminContentSourceState
+): AdminContentEditorPayload => {
+  const { collection } = state;
   if (collection === 'essay') {
     return {
       collection,
@@ -800,6 +817,10 @@ export const readAdminContentEntryEditorPayload = async (
     };
   }
 
+  if (collection === 'about') {
+    return buildAdminAboutEditorPayload(state);
+  }
+
   return {
     collection,
     entryId: state.entryId,
@@ -812,6 +833,20 @@ export const readAdminContentEntryEditorPayload = async (
     bodyText: state.bodyText,
     values: toMemoEditorValues(state)
   };
+};
+
+export const readAdminContentEntryEditorPayload = async (
+  collection: AdminContentEntryWriteCollectionKey,
+  entryId: string
+): Promise<AdminContentEditorPayload> => {
+  if (!getAdminContentCollectionCapability(collection).entryWritable) {
+    throw new AdminContentEntryResolutionError(
+      'invalid-entry-id',
+      getAdminContentReadOnlyReason(collection) ?? `当前 collection 暂不支持写盘：${collection}`
+    );
+  }
+
+  return buildAdminContentEntryEditorPayloadFromState(await loadAdminContentSourceState(collection, entryId));
 };
 
 const buildEssayFrontmatterFromValues = (
@@ -1295,20 +1330,18 @@ const buildMemoWritePlan = (
   };
 };
 
-export const buildAdminContentWritePlan = async (
-  collection: AdminContentWriteCollectionKey,
-  entryId: string,
+export const buildAdminContentWritePlanFromState = async (
+  state: AdminContentSourceState,
   frontmatterInput: unknown,
   bodyInput?: string
 ): Promise<AdminWritePlan & { state: AdminContentSourceState }> => {
-  if (!getAdminContentCollectionCapability(collection).writable) {
+  const { collection } = state;
+  if (!getAdminContentCollectionCapability(collection).entryWritable) {
     throw new AdminContentEntryResolutionError(
       'invalid-entry-id',
       getAdminContentReadOnlyReason(collection) ?? `当前 collection 暂不支持写盘：${collection}`
     );
   }
-
-  const state = await loadAdminContentSourceState(collection, entryId);
 
   if (collection === 'essay') {
     const parsed = parseAdminEssayEditorInput(frontmatterInput);
@@ -1346,6 +1379,13 @@ export const buildAdminContentWritePlan = async (
     };
   }
 
+  if (collection === 'about') {
+    return {
+      state,
+      ...buildAdminAboutWritePlan(state, bodyInput)
+    };
+  }
+
   const memoIssues = validateAdminMemoEditorInput(frontmatterInput);
   if (memoIssues.length > 0) {
     return {
@@ -1361,6 +1401,18 @@ export const buildAdminContentWritePlan = async (
     ...buildMemoWritePlan(state, bodyInput)
   };
 };
+
+export const buildAdminContentWritePlan = async (
+  collection: AdminContentEntryWriteCollectionKey,
+  entryId: string,
+  frontmatterInput: unknown,
+  bodyInput?: string
+): Promise<AdminWritePlan & { state: AdminContentSourceState }> =>
+  buildAdminContentWritePlanFromState(
+    await loadAdminContentSourceState(collection, entryId),
+    frontmatterInput,
+    bodyInput
+  );
 
 export const applyAdminContentWritePlan = (
   state: Pick<AdminContentSourceState, 'sourceText'>,

@@ -346,11 +346,7 @@ const createMemoSourceIndexItem: FrontmatterAdapter = (record) => {
 };
 
 const createAboutSourceIndexItem: FrontmatterAdapter = (record) => {
-  const frontmatter = record.frontmatter;
   const bodyDerived = getBodyDerived(record);
-  const friendsTitle = normalizeOptionalText(frontmatter.friendsTitle);
-  const friendsDescription = normalizeOptionalText(frontmatter.friendsDescription);
-  const contactNote = normalizeOptionalText(frontmatter.contactNote);
   const sourceError = record.sourceError;
 
   return createBaseItem(record, {
@@ -368,9 +364,6 @@ const createAboutSourceIndexItem: FrontmatterAdapter = (record) => {
       record.entryId,
       record.publicEntryId,
       'about',
-      friendsTitle,
-      friendsDescription,
-      contactNote,
       bodyDerived?.text,
       sourceError
     ]),

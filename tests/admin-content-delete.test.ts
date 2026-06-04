@@ -56,7 +56,7 @@ describe('admin content delete api', () => {
     );
     await writeFile(
       path.join(tempRoot, 'src', 'content', 'about', 'index.md'),
-      ['---', 'friendsTitle: Friends', '---', '', 'about body', ''].join('\n'),
+      ['---', '---', '', 'about body', ''].join('\n'),
       'utf8'
     );
   });

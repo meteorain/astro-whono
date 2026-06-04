@@ -18,6 +18,7 @@ type Props = {
   busy: boolean;
   bodyToolsEnabled?: boolean;
   toolbarPreset?: EditorToolbarPreset;
+  imageToolEnabled?: boolean;
   galleryToolEnabled?: boolean;
   outlineOpen: boolean;
   outlineVisible: boolean;
@@ -80,6 +81,7 @@ let {
   busy,
   bodyToolsEnabled = true,
   toolbarPreset = 'full',
+  imageToolEnabled = true,
   galleryToolEnabled = true,
   outlineOpen,
   outlineVisible,
@@ -142,6 +144,7 @@ let {
   <EditorToolbar
     preset={toolbarPreset}
     {busy}
+    {imageToolEnabled}
     {galleryToolEnabled}
     {outlineOpen}
     {outlineVisible}

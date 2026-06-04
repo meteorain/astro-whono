@@ -1,6 +1,6 @@
 <script lang="ts">
 import type {
-  AdminContentEditorValues,
+  AdminContentWorkspaceEditorValues,
   AdminContentCollectionKey
 } from '../../../lib/admin-console/content-shared';
 import { createModalDialogFocusController } from '../../../scripts/admin-console/modal-dialog-focus';
@@ -15,7 +15,7 @@ type AdminContentIssue = {
 
 type Props = {
   open: boolean;
-  value: AdminContentEditorValues;
+  value: AdminContentWorkspaceEditorValues;
   collection?: AdminContentCollectionKey;
   issues?: readonly AdminContentIssue[];
   disabled?: boolean;

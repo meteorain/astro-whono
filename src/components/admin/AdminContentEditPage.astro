@@ -55,11 +55,9 @@ const contentEditDevState = shouldShowContentConsole
     })
   : null;
 const selectedEntryEditorPayload = contentEditDevState?.payload ?? null;
-const writableEditorPayload = selectedEntryEditorPayload?.writable
-  ? selectedEntryEditorPayload
-  : null;
-const editorRegistration = writableEditorPayload
-  ? getAdminContentEditorPageRegistration(writableEditorPayload.collection)
+const workspaceEditorPayload = selectedEntryEditorPayload;
+const editorRegistration = workspaceEditorPayload
+  ? getAdminContentEditorPageRegistration(workspaceEditorPayload.collection)
   : null;
 // Keep Svelte islands behind DEV-only dynamic imports; static imports leak
 // editor chunks into the production build.
@@ -70,10 +68,10 @@ if (import.meta.env.DEV && editorRegistration) {
 }
 const adminStylesHref = contentEditDevState?.stylesHref ?? adminShellStylesHref;
 const collectionHref = withBase(getAdminContentEntryListHref(collection));
-const shouldUseEditorPageLayout = Boolean(EditorIsland && writableEditorPayload && editorRegistration);
+const shouldUseEditorPageLayout = Boolean(EditorIsland && workspaceEditorPayload && editorRegistration);
 const contentEditorBodyClass = shouldUseEditorPageLayout ? 'admin-page--content-editor' : undefined;
-const memoPublicTitle = writableEditorPayload?.collection === 'memo'
-  ? resolveMemoDisplayText(settings.page.memo.title, writableEditorPayload.values.title, DEFAULT_MEMO_TITLE)
+const memoPublicTitle = workspaceEditorPayload?.collection === 'memo'
+  ? resolveMemoDisplayText(settings.page.memo.title, workspaceEditorPayload.values.title, DEFAULT_MEMO_TITLE)
   : DEFAULT_MEMO_TITLE;
 const editorEndpoints = {
   endpoint: withBase(ADMIN_CONTENT_ENTRY_API_PATH),
@@ -87,9 +85,9 @@ const adminImageMetaEndpoint = withBase(ADMIN_IMAGE_META_API_PATH);
 const editorReturnHref = editorRegistration
   ? editorRegistration.resolveReturnHref({ withBase, collectionHref })
   : collectionHref;
-const editorIslandProps = writableEditorPayload && contentEditDevState
+const editorIslandProps = workspaceEditorPayload && contentEditDevState
   ? buildAdminContentEditorIslandProps({
-      payload: writableEditorPayload,
+      payload: workspaceEditorPayload,
       endpoints: editorEndpoints,
       returnHref: editorReturnHref,
       defaultAuthor: bitsDefaultAuthor,
@@ -98,18 +96,14 @@ const editorIslandProps = writableEditorPayload && contentEditDevState
     })
   : null;
 const contentConsoleSubtitle = selectedEntryEditorPayload
-  ? `${selectedEntryEditorPayload.collection} · ${
-      selectedEntryEditorPayload.collection === 'essay'
-        ? '内容编辑'
-        : selectedEntryEditorPayload.writable
-          ? '内容编辑'
-          : '只读详情'
-    }`
+  ? `${selectedEntryEditorPayload.collection} · 内容编辑`
   : '内容编辑';
 const selectedEntryTitle = selectedEntryEditorPayload
   ? selectedEntryEditorPayload.collection === 'memo'
     ? memoPublicTitle
-    : selectedEntryEditorPayload.values.title
+    : selectedEntryEditorPayload.collection === 'about'
+      ? '关于'
+      : selectedEntryEditorPayload.values.title
   : '';
 const selectedEntryDescription = selectedEntryEditorPayload && 'description' in selectedEntryEditorPayload.values
   ? selectedEntryEditorPayload.values.description
@@ -118,13 +112,13 @@ const editTitle = selectedEntryEditorPayload
   ? selectedEntryTitle || selectedEntryDescription || selectedEntryEditorPayload.entryId
   : entryId;
 const getReadonlyValue = (value: string): string => value || '(未设置)';
-const memoReadonlyRows = writableEditorPayload?.collection === 'memo'
+const memoReadonlyRows = workspaceEditorPayload?.collection === 'memo'
   ? [
-      { label: 'memo.title', value: getReadonlyValue(writableEditorPayload.values.title) },
-      { label: 'memo.subtitle', value: getReadonlyValue(writableEditorPayload.values.subtitle) },
-      { label: 'memo.date', value: getReadonlyValue(writableEditorPayload.values.date) },
-      { label: 'memo.slug', value: getReadonlyValue(writableEditorPayload.values.slug) },
-      { label: 'memo.draft', value: writableEditorPayload.values.draft ? 'true' : 'false' }
+      { label: 'memo.title', value: getReadonlyValue(workspaceEditorPayload.values.title) },
+      { label: 'memo.subtitle', value: getReadonlyValue(workspaceEditorPayload.values.subtitle) },
+      { label: 'memo.date', value: getReadonlyValue(workspaceEditorPayload.values.date) },
+      { label: 'memo.slug', value: getReadonlyValue(workspaceEditorPayload.values.slug) },
+      { label: 'memo.draft', value: workspaceEditorPayload.values.draft ? 'true' : 'false' }
     ]
   : [];
 const infoTrigger = shouldUseEditorPageLayout ? editorRegistration?.infoTrigger : null;

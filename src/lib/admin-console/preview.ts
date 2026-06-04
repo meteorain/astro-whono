@@ -23,6 +23,7 @@ import {
   rehypeProtectMarkdownMath,
   rehypeRestoreMarkdownMathBoundary
 } from '../../plugins/rehype-markdown-math-boundary.mjs';
+import { rehypeAboutDirectives, remarkAboutDirectives } from '../../plugins/about-directives.mjs';
 import remarkCallout from '../../plugins/remark-callout.mjs';
 import { sanitizeSchema } from '../../plugins/sanitize-schema.mjs';
 import shikiToolbar from '../../plugins/shiki-toolbar.mjs';
@@ -88,6 +89,8 @@ const previewShikiOptions: RehypeShikiOptions = {
   fallbackLanguage: 'text',
   cache: previewCodeHighlightCache
 };
+
+const previewBase = import.meta.env.BASE_URL ?? '/';
 
 const getProjectRoot = (): string => process.env.ASTRO_WHONO_INTERNAL_TEST_PROJECT_ROOT?.trim() || process.cwd();
 
@@ -172,13 +175,19 @@ const createPreviewOutlineAnchorPlugin = (source: string): Plugin<[], Root> => {
   };
 };
 
-const createPreviewProcessor = (sourceFilePath: string | null, source: string) =>
-  unified()
+const createPreviewProcessor = (collection: AdminContentCollectionKey, sourceFilePath: string | null, source: string) => {
+  const processor = unified()
     .use(remarkParse)
     // 后台预览是手写 pipeline，不继承 Astro Markdown 默认 GFM；显式接入以对齐公开文章渲染。
     .use(remarkGfm)
     .use(remarkMath, { singleDollarTextMath: false })
-    .use(remarkDirective)
+    .use(remarkDirective);
+
+  if (collection === 'about') {
+    processor.use(remarkAboutDirectives, { enabled: true });
+  }
+
+  processor
     .use(remarkCallout)
     .use(remarkRehype, { allowDangerousHtml: true })
     .use(createPreviewOutlineAnchorPlugin(source))
@@ -186,10 +195,17 @@ const createPreviewProcessor = (sourceFilePath: string | null, source: string) =
     .use(rehypeShiki, previewShikiOptions)
     .use(rehypeRaw, markdownMathRawOptions)
     .use(rehypeRestoreMarkdownMathBoundary)
-    .use(createPreviewImageSrcPlugin(sourceFilePath))
+    .use(createPreviewImageSrcPlugin(sourceFilePath));
+
+  if (collection === 'about') {
+    processor.use(rehypeAboutDirectives, { base: previewBase, enabled: true });
+  }
+
+  return processor
     .use(rehypeSanitize, sanitizeSchema as unknown as RehypeSanitizeOptions)
     .use(rehypeKatex)
     .use(rehypeStringify);
+};
 
 const roundElapsedMs = (value: number): number => Math.round(value * 10) / 10;
 
@@ -200,7 +216,7 @@ export const renderAdminMarkdownPreview = async ({
 }: AdminMarkdownPreviewInput): Promise<AdminMarkdownPreviewResult> => {
   const startedAt = performance.now();
   const sourceFilePath = entryId ? resolveAdminContentEntrySourcePath(collection, entryId) : null;
-  const previewProcessor = createPreviewProcessor(sourceFilePath, source);
+  const previewProcessor = createPreviewProcessor(collection, sourceFilePath, source);
   const file = await previewProcessor.process(source);
 
   return {

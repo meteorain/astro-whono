@@ -43,7 +43,7 @@ describe('admin content source export', () => {
     );
     await writeFile(
       path.join(tempRoot, 'src', 'content', 'about', 'index.md'),
-      ['---', 'friendsTitle: Friends', '---', '', 'about body', ''].join('\n'),
+      ['---', '---', '', 'about body', ''].join('\n'),
       'utf8'
     );
   });

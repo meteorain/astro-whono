@@ -122,8 +122,7 @@ const createDefaultItems = (): Record<AdminContentCollectionKey, AdminContentInd
       dateLabel: '固定单页',
       year: null,
       tags: [],
-      searchHaystack: '关于 about index friends contact',
-      readonlyReason: 'about 固定页编辑器尚未接入；当前仅支持从 Content Console 查看与导出源文件'
+      searchHaystack: '关于 about index friends contact'
     })
   ]
 });
@@ -679,7 +678,7 @@ describe('admin-console/content', () => {
       collection: 'about',
       title: '关于',
       publicHref: '/about/',
-      readonlyReason: expect.stringContaining('尚未接入')
+      readonlyReason: null
     });
   });
 

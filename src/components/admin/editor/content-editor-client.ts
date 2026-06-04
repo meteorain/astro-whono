@@ -1,7 +1,9 @@
 import type {
-  AdminContentEditorValues,
+  AdminBitsEditorValues,
   AdminContentCollectionKey,
-  AdminContentWriteCollectionKey
+  AdminContentEditorValues,
+  AdminEssayEditorValues,
+  AdminMemoEditorValues
 } from '../../../lib/admin-console/content-shared';
 import type { AdminContentDeletableCollectionKey } from '../../../lib/admin-console/content-delete-contract';
 import {
@@ -39,16 +41,35 @@ type ContentEditorRequestOutcome = {
   issues: AdminContentIssue[];
 };
 
-export type ContentEditorSaveInput = {
+type ContentEditorSaveBaseInput = {
   endpoint: string;
-  collection: AdminContentWriteCollectionKey;
   entryId: string;
   revision: string;
-  frontmatter: AdminContentEditorValues;
-  body?: string;
   dryRun?: boolean;
   fetchImpl?: FetchLike;
 };
+
+export type ContentEditorSaveInput = ContentEditorSaveBaseInput & (
+  | {
+      collection: 'essay';
+      frontmatter: AdminEssayEditorValues;
+      body?: string;
+    }
+  | {
+      collection: 'bits';
+      frontmatter: AdminBitsEditorValues;
+      body?: string;
+    }
+  | {
+      collection: 'memo';
+      frontmatter: AdminMemoEditorValues;
+      body?: string;
+    }
+  | {
+      collection: 'about';
+      body: string;
+    }
+);
 
 export type ContentEditorSaveOutcome = ContentEditorRequestOutcome & {
   result: AdminContentWriteResult | null;
@@ -66,6 +87,7 @@ export type ContentEditorPreviewInput = {
 };
 
 export type ContentEditorPreviewOutcome = Omit<ContentEditorRequestOutcome, 'revision' | 'issues'> & {
+  issues: AdminContentIssue[];
   result: AdminContentPreviewResult | null;
 };
 
@@ -97,27 +119,30 @@ const buildContentWriteEndpoint = (endpoint: string, dryRun: boolean): string =>
   return url.toString();
 };
 
-export const saveContentEntry = async ({
-  endpoint,
-  collection,
-  entryId,
-  revision,
-  frontmatter,
-  body,
-  dryRun = false,
-  fetchImpl
-}: ContentEditorSaveInput): Promise<ContentEditorSaveOutcome> => {
+const buildContentWriteRequestBody = (input: ContentEditorSaveInput): Record<string, unknown> => {
+  const requestBody: Record<string, unknown> = {
+    collection: input.collection,
+    entryId: input.entryId,
+    revision: input.revision
+  };
+
+  if (input.collection !== 'about') {
+    requestBody.frontmatter = input.frontmatter;
+  }
+  if ('body' in input) {
+    requestBody.body = input.body;
+  }
+
+  return requestBody;
+};
+
+export const saveContentEntry = async (input: ContentEditorSaveInput): Promise<ContentEditorSaveOutcome> => {
+  const { endpoint, collection, dryRun = false, fetchImpl } = input;
   const response = await getFetch(fetchImpl)(buildContentWriteEndpoint(endpoint, dryRun), {
     method: 'POST',
     headers: JSON_REQUEST_HEADERS,
     cache: 'no-store',
-    body: JSON.stringify({
-      collection,
-      entryId,
-      revision,
-      frontmatter,
-      ...(body !== undefined ? { body } : {})
-    })
+    body: JSON.stringify(buildContentWriteRequestBody(input))
   });
   const payload = await parseResponseBody(response);
 
@@ -162,6 +187,7 @@ export const renderContentPreview = async ({
     status: response.status,
     payloadOk: isPayloadOk(payload),
     errors: getPayloadErrors(payload),
+    issues: getPayloadIssues(payload),
     result: getPayloadPreviewResult(payload)
   };
 };

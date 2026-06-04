@@ -3,7 +3,8 @@ import type {
 } from '../../lib/admin-console/content-shared';
 import {
   readAdminContentEntryEditorPayload,
-  type AdminContentEditorPayload
+  type AdminContentEditorPayload,
+  type AdminContentWorkspaceEditorPayload
 } from '../../lib/admin-console/content-shared';
 import {
   getAdminContentEditorPageRegistration,
@@ -18,7 +19,7 @@ type WithBase = (path: string) => string;
 type ReadEditorPayload = (
   collection: AdminContentWriteCollectionKey,
   entryId: string
-) => Promise<AdminContentEditorPayload>;
+) => Promise<AdminContentWorkspaceEditorPayload>;
 type LoadStyleSlot = (slot: AdminContentEditorStyleSlot) => Promise<string>;
 type LoadOutlines = (
   registration: AdminContentEditorOutlineRegistration,
@@ -36,9 +37,25 @@ type LoadAdminContentEditDevStateInput = {
 };
 
 export type AdminContentEditDevState = {
-  payload: AdminContentEditorPayload;
+  payload: AdminContentWorkspaceEditorPayload;
   outlines: AdminContentEditorOutlines;
   stylesHref: string[];
+};
+
+const isAdminContentWorkspaceEditorPayload = (
+  payload: AdminContentEditorPayload
+): payload is AdminContentWorkspaceEditorPayload =>
+  payload.collection === 'essay'
+  || payload.collection === 'bits'
+  || payload.collection === 'memo'
+  || payload.collection === 'about';
+
+const readAdminContentWorkspaceEditorPayload: ReadEditorPayload = async (collection, entryId) => {
+  const payload = await readAdminContentEntryEditorPayload(collection, entryId);
+  if (!isAdminContentWorkspaceEditorPayload(payload) || payload.collection !== collection) {
+    throw new Error(`Unexpected admin content editor payload: ${payload.collection}`);
+  }
+  return payload;
 };
 
 export const loadAdminContentEditDevState = async ({
@@ -46,7 +63,7 @@ export const loadAdminContentEditDevState = async ({
   entryId,
   adminShellStylesHref,
   withBase,
-  readPayload = readAdminContentEntryEditorPayload,
+  readPayload = readAdminContentWorkspaceEditorPayload,
   loadStyleSlot,
   loadOutlines = loadAdminContentEditorOutlines
 }: LoadAdminContentEditDevStateInput): Promise<AdminContentEditDevState> => {

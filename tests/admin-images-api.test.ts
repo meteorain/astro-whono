@@ -57,7 +57,7 @@ describe('admin images api', () => {
     );
     await writeFile(
       path.join(tempRoot, 'src', 'content', 'about', 'index.md'),
-      ['---', 'friendsTitle: About 图片上传测试', '---', '', 'about body'].join('\n')
+      ['---', '---', '', 'about body'].join('\n')
     );
     await writeFile(path.join(tempRoot, 'src', 'content', 'essay', 'guide-assets', 'hero.png'), PNG_1X1);
     await writeFile(path.join(tempRoot, 'src', 'assets', 'hero.png'), PNG_1X1);
@@ -378,7 +378,7 @@ describe('admin images api', () => {
     );
   });
 
-  it('rejects about image uploads while the about editor is readonly', async () => {
+  it('rejects about image uploads because about has no upload capability', async () => {
     const { POST } = await import('../src/pages/api/admin/images/upload');
     const formData = new FormData();
     formData.set('collection', 'about');

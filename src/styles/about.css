@@ -62,22 +62,6 @@
   margin-top: 0;
 }
 
-.about-section-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  white-space: nowrap;
-}
-
-.about-section-description {
-  margin: 8px 0 0;
-  color: var(--muted);
-  font-size: 15px;
-  line-height: 1.75;
-  font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
-}
-
 .friend-list {
   list-style: none;
   margin: 14px 0 0;
@@ -139,13 +123,14 @@
 .friend-card__body {
   min-width: 0;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 
 .friend-card__name {
   font-size: 16px;
   line-height: 1.35;
   font-weight: 600;
+  font-family: "Noto Serif SC", ui-serif, Georgia, "Times New Roman", "Songti SC", serif;
 }
 
 .friend-card__description {
@@ -153,39 +138,6 @@
   font-size: 14px;
   line-height: 1.6;
   font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
-}
-
-.friend-apply-link {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  min-height: 24px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: transparent;
-  color: var(--muted);
-  font-size: 13px;
-  font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
-  line-height: 1;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
-}
-
-.friend-apply-link:hover {
-  color: var(--text);
-  background: #f7f7f5;
-  border-color: #dfdcd8;
-}
-
-.friend-apply-link:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: 2px;
-}
-
-:root[data-theme="dark"] .friend-apply-link:hover {
-  background: #252525;
-  border-color: #3d3d3d;
 }
 
 .qa-list {
@@ -235,22 +187,50 @@
 
 .qa-answer {
   margin: 12px 0 0;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
   color: var(--muted);
   font-size: 16px;
   line-height: 1.75;
   font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
 }
 
-.contact-block {
-  margin-top: 12px;
+.qa-answer::before {
+  content: "A";
+  width: 22px;
+  height: 22px;
+  margin-top: 3px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #f7f7f5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
 }
 
-.contact-note {
-  margin: 0 0 10px;
-  color: var(--text);
-  font-size: 16px;
-  line-height: 1.75;
-  font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
+:root[data-theme="dark"] .qa-answer::before {
+  background: #252525;
+}
+
+.qa-answer > * {
+  grid-column: 2;
+}
+
+.qa-answer > :first-child {
+  margin-top: 0;
+}
+
+.qa-answer > :last-child {
+  margin-bottom: 0;
+}
+
+.contact-block {
+  margin-top: 12px;
 }
 
 .contact-list {

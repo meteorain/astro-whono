@@ -6,6 +6,7 @@ import {
   getPayloadEditorBody,
   getPayloadEditorValues
 } from '../src/scripts/admin-content/entry-transport';
+import type { AdminAboutEditorValues } from '../src/lib/admin-console/content-about-contract';
 import type {
   AdminBitsEditorValues,
   AdminContentWriteCollectionKey,
@@ -18,6 +19,7 @@ describe('content editor adapters', () => {
     const essay = getContentEditorAdapter('essay');
     const bits = getContentEditorAdapter('bits');
     const memo = getContentEditorAdapter('memo');
+    const about = getContentEditorAdapter('about');
 
     expect(essay.capabilities.bodyImageInsert).toBe(true);
     expect(essay.capabilities.imageArray).toBe(false);
@@ -40,10 +42,21 @@ describe('content editor adapters', () => {
     expect(memo.capabilities.delete).toBe(false);
     expect(memo.isFrontmatterIssuePath('title')).toBe(false);
     expect(memo.isFrontmatterIssuePath('images[0].src')).toBe(false);
+
+    expect(about.capabilities.body).toBe(true);
+    expect(about.capabilities.preview).toBe(true);
+    expect(about.capabilities.bodyImageInsert).toBe(false);
+    expect(about.capabilities.bodyGalleryInsert).toBe(false);
+    expect(about.capabilities.imageArray).toBe(false);
+    expect(about.capabilities.delete).toBe(false);
+    expect(about.frontmatterIssuePaths.size).toBe(0);
+    expect(about.isFrontmatterIssuePath('friends[0].url')).toBe(false);
+    expect(about.isFrontmatterIssuePath('faq[0].answer')).toBe(false);
+    expect(about.isFrontmatterIssuePath('title')).toBe(false);
   });
 
   it('derives delete affordance from collection capabilities', () => {
-    const collections: AdminContentWriteCollectionKey[] = ['essay', 'bits', 'memo'];
+    const collections: AdminContentWriteCollectionKey[] = ['essay', 'bits', 'memo', 'about'];
 
     for (const collection of collections) {
       const adapter = getContentEditorAdapter(collection);
@@ -112,5 +125,28 @@ describe('content editor adapters', () => {
     expect(getPayloadEditorValues(payload, 'memo')).toEqual(memoValues);
     expect(getPayloadEditorValues(payload, 'bits')).toBeNull();
     expect(getPayloadEditorBody(payload, 'memo')).toBe('Memo body');
+  });
+
+  it('accepts writable about payloads with body-only values', () => {
+    const aboutValues: AdminAboutEditorValues = {};
+    const payload = {
+      ok: true,
+      payload: {
+        collection: 'about',
+        entryId: 'index',
+        publicEntryId: 'index',
+        defaultPublicSlug: 'index',
+        revision: 'rev',
+        relativePath: 'src/content/about/index.md',
+        writable: true,
+        readonlyReason: null,
+        bodyText: 'About body',
+        values: aboutValues
+      }
+    };
+
+    expect(getPayloadEditorValues(payload, 'about')).toEqual(aboutValues);
+    expect(getPayloadEditorValues(payload, 'memo')).toBeNull();
+    expect(getPayloadEditorBody(payload, 'about')).toBe('About body');
   });
 });

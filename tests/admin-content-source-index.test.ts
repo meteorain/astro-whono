@@ -125,11 +125,7 @@ describe('admin-console/content-source-index', () => {
       date: 2026-05-03
       slug: memo
     `));
-    await writeContent('about', 'index.md', markdown(`
-      friendsTitle: 朋友们
-      friendsDescription: 站点链接
-      contactNote: 欢迎联系
-    `, 'About body text.'));
+    await writeContent('about', 'index.md', markdown('', 'About body text.'));
 
     const manifest = await loadAdminContentSourceManifest();
     const essay = (await loadAdminContentSourceIndex(manifest, 'essay'))[0];
@@ -176,7 +172,7 @@ describe('admin-console/content-source-index', () => {
       collection: 'about',
       id: 'index',
       publicHref: '/about/',
-      readonlyReason: expect.stringContaining('尚未接入'),
+      readonlyReason: null,
       title: '关于',
       slug: 'about',
       date: null,
@@ -185,8 +181,8 @@ describe('admin-console/content-source-index', () => {
       tags: [],
       sourceError: null
     });
-    expect(about?.searchHaystack).toContain('朋友们');
-    expect(about?.searchHaystack).toContain('欢迎联系');
+    expect(about?.searchHaystack).toContain('关于');
+    expect(about?.searchHaystack).not.toContain('About body text');
   });
 
   it('keeps collection-specific date semantics in source index items', async () => {
@@ -299,15 +295,29 @@ describe('admin-console/content-source-index', () => {
     expect(memo?.searchHaystack).not.toContain(lateMarker);
   });
 
+  it('uses about body text only in the body-augmented fixed-page index', async () => {
+    await writeContent('about', 'index.md', markdown('legacyField: ignored', 'Body-only about marker.'));
+
+    const manifest = await loadAdminContentSourceManifest();
+    const metadataOnly = (await loadAdminContentSourceIndex(manifest, 'about'))[0];
+    const withBody = (await loadAdminContentSourceIndexWithBody(manifest, 'about'))[0];
+
+    expect(metadataOnly?.searchHaystack).not.toContain('body-only about marker');
+    expect(metadataOnly?.searchHaystack).not.toContain('legacyfield');
+    expect(withBody?.bodyDerived.plainText).toBe('Body-only about marker.');
+    expect(withBody?.searchHaystack).toContain('body-only about marker');
+    expect(withBody?.searchHaystack).not.toContain('legacyfield');
+  });
+
   it('keeps fixed-page source manifests constrained to index.md', async () => {
     await writeContent('memo', 'index.md', markdown('title: Memo'));
     await writeContent('memo', 'index.mdx', markdown('title: MDX Memo'));
     await writeContent('memo', 'extra.md', markdown('title: Extra Memo'));
     await writeContent('memo', 'nested/index.md', markdown('title: Nested Memo'));
     await writeContent('memo', 'index/index.md', markdown('title: Directory Memo'));
-    await writeContent('about', 'index.md', markdown('friendsTitle: About'));
-    await writeContent('about', 'extra.md', markdown('friendsTitle: Extra About'));
-    await writeContent('about', 'nested/index.md', markdown('friendsTitle: Nested About'));
+    await writeContent('about', 'index.md', markdown('', 'About'));
+    await writeContent('about', 'extra.md', markdown('', 'Extra About'));
+    await writeContent('about', 'nested/index.md', markdown('', 'Nested About'));
 
     const manifest = await loadAdminContentSourceManifest();
     const memoItems = await loadAdminContentSourceIndex(manifest, 'memo');

@@ -13,9 +13,7 @@ import {
   type AdminContentValidationIssue
 } from '../../../../lib/admin-console/content-shared';
 import type { AdminContentWriteCollectionKey } from '../../../../lib/admin-console/content-shared';
-import {
-  renderAdminMarkdownPreview
-} from '../../../../lib/admin-console/preview';
+import { renderAdminMarkdownPreview } from '../../../../lib/admin-console/preview';
 
 type PreviewInput = {
   collection?: AdminContentWriteCollectionKey;
@@ -106,6 +104,18 @@ const extractPreviewInput = (body: unknown): PreviewInput => {
       issues.push({ path: 'entryId', message });
     } else {
       entryId = body.entryId.trim();
+    }
+  }
+
+  if (rawCollection === 'about') {
+    if (!entryId) {
+      const message = 'about 预览必须提供固定 entryId：index';
+      errors.push(message);
+      issues.push({ path: 'entryId', message });
+    } else if (entryId !== 'index') {
+      const message = 'about 预览仅支持固定 entryId：index';
+      errors.push(message);
+      issues.push({ path: 'entryId', message });
     }
   }
 
