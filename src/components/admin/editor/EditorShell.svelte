@@ -24,11 +24,9 @@ import EditorTopControls from './EditorTopControls.svelte';
 import EditorWorkspace from './EditorWorkspace.svelte';
 import {
   ADMIN_EDITOR_DETAILS_MENU_SELECTORS,
-  bindEditorPageIntegration,
-  mountEditorPageActionsPortal,
-  observeElementInlineSize,
   syncArticleInfoTriggers
 } from './editor-page-integration';
+import { createEditorPageLifecycle } from './editor-page-lifecycle';
 import {
   CONTENT_LIST_DELETE_FEEDBACK_STORAGE_KEY,
   CONTENT_LIST_DELETE_FEEDBACK_VALUE
@@ -36,46 +34,24 @@ import {
 import {
   buildContentExportHref,
   clearStoredWriteFeedback,
-  DEFAULT_EDITOR_DISPLAY_PREFERENCE,
-  DEFAULT_EDITOR_LAYOUT_INTENT,
   EDITOR_OUTLINE_TARGET_SCROLL_OFFSET_RATIO,
   EDITOR_SCROLLBAR_VISIBILITY_TIMEOUT_MS,
-  EDITOR_SINGLE_VIEW_RETURN_LABEL,
-  EDITOR_SPLIT_MIN_INLINE_SIZE,
-  getEditorCompactPaneToggleLabel,
-  getEditorCompactPaneToggleText,
-  getEditorEditViewToggleLabel,
-  getEditorLayoutToggleIcon,
-  getEditorLayoutToggleLabel,
-  getEditorPreviewViewToggleLabel,
+  getEditorBodyCharCount,
   getEditorScrollSyncToggleLabel,
-  getEditorSidePanelLayout,
   getPreviewDebounceMs,
-  isEditorOutlineAvailableForInlineSize,
-  mergeEditorDisplayPreference,
   normalizeEditorBodyValue,
-  readRestoredEditorPreferences,
   readStoredWriteFeedback,
-  storeEditorDisplayPreference,
-  storeEditorLayout,
-  storeEditorSidePanelPreference,
   storeWriteFeedback,
-  type EditorDisplayPreference,
-  type EditorLayoutMode,
-  type EditorPaneMode,
   type EditorScrollSource,
-  type EditorSidePanelLayout,
-  type EditorViewMode,
   type StatusState
 } from './editor-shell-helpers';
-import type { MarkdownHighlightTheme } from './editor-markdown-highlight';
+import { createEditorShellController } from './editor-shell-controller.svelte';
 import type { EditableImageBlock } from './editor-image-blocks';
 import type { EditableGalleryBlock } from './editor-gallery-blocks';
 import { createEditorScrollSyncController } from './editor-scroll-sync';
 import {
   buildEssayOutlineListItems,
   extractMarkdownOutline,
-  type EditorOutlineTab,
   type MarkdownOutlineJumpCommand,
   type MarkdownOutlineItem
 } from './editor-outline-helpers';
@@ -153,15 +129,15 @@ let writeResult = $state<AdminContentWriteResult | null>(null);
 let previewHtml = $state('');
 let previewWarnings = $state<string[]>([]);
 let previewError = $state('');
-let explicitEditorLayout = $state<EditorLayoutMode | null>(null);
-let editorViewMode = $state<EditorViewMode>('both');
-let compactPaneMode = $state<EditorPaneMode>('edit');
-let outlineWantedOpen = $state(false);
-let outlineActiveTab = $state<EditorOutlineTab>('headings');
-let syntaxWantedOpen = $state(false);
-let syntaxMaximized = $state(false);
-let editorPreferencesRestored = false;
 const previewRequestGuard = createEditorPreviewRequestGuard();
+const readDevAdminEditorDefaults = () =>
+  import.meta.env.DEV ? readStoredAdminEditorDefaults(ADMIN_EDITOR_DEFAULTS_STORAGE_KEY) : null;
+const shell = createEditorShellController({
+  layoutStorageKey: ADMIN_EDITOR_LAYOUT_STORAGE_KEY,
+  displayPreferenceStorageKey: ADMIN_EDITOR_DISPLAY_PREFERENCE_STORAGE_KEY,
+  sidePanelPreferenceStorageKey: ADMIN_EDITOR_SIDE_PANEL_PREFERENCE_STORAGE_KEY,
+  readAdminDefaults: readDevAdminEditorDefaults
+});
 let toolbarCommand = $state<MarkdownToolbarCommand | null>(null);
 let outlineJumpCommand = $state<MarkdownOutlineJumpCommand | null>(null);
 let frontmatterPanelOpen = $state(initialSnapshot.articleInfoOpen);
@@ -177,20 +153,17 @@ const markdownCommandDispatcher = createMarkdownCommandDispatcher({
   }
 });
 let editorShellEl = $state<HTMLElement | null>(null);
-let editorShellInlineSize = $state(0);
 let topActionsEl = $state<HTMLDivElement | null>(null);
 let bodyScrollElement = $state<HTMLElement | null>(null);
 let previewScrollElement = $state<HTMLElement | null>(null);
 let syncScrollEnabled = $state(true);
-let lineNumbersEnabled = $state(false);
-let markdownHighlightTheme = $state<MarkdownHighlightTheme>(DEFAULT_EDITOR_DISPLAY_PREFERENCE.markdownHighlightTheme);
 let writeFeedbackRestored = false;
 let pendingPreviewOutlineKey = $state<string | null>(null);
 let pendingPreviewOutlineJumpId = 0;
 let outlineJumpCommandId = 0;
 
 const bodyLineCount = $derived(body.length === 0 ? 1 : body.split(/\r\n|\r|\n/).length);
-const bodyCharCount = $derived(body.length);
+const bodyCharCount = $derived(getEditorBodyCharCount(body));
 const frontmatterDirty = $derived(!editorAdapter.isEqualValues(frontmatter, baselineFrontmatter));
 const bodyDirty = $derived(bodyEditingEnabled && body !== baselineBody);
 const isDirty = $derived(frontmatterDirty || bodyDirty);
@@ -199,62 +172,9 @@ const frontmatterIssueCount = $derived(
   issues.filter((issue) => editorAdapter.isFrontmatterIssuePath(issue.path)).length
 );
 const visibleWriteResult = $derived(!isDirty ? writeResult : null);
-const editorLayout = $derived(explicitEditorLayout ?? DEFAULT_EDITOR_LAYOUT_INTENT);
-const splitWidthIsCompact = $derived(
-  editorShellInlineSize > 0 && editorShellInlineSize < EDITOR_SPLIT_MIN_INLINE_SIZE
-);
-const splitBothIsCompact = $derived(
-  editorLayout === 'split' && editorViewMode === 'both' && splitWidthIsCompact
-);
-const stackedCanReturnToCompact = $derived(
-  editorLayout === 'stacked' && editorViewMode === 'both' && splitWidthIsCompact
-);
-const effectiveViewMode: EditorViewMode = $derived(splitBothIsCompact ? compactPaneMode : editorViewMode);
-const sidePanelsAvailable = $derived(isEditorOutlineAvailableForInlineSize({
-  inlineSize: editorShellInlineSize,
-  layout: editorLayout,
-  viewMode: editorViewMode
-}));
-const sidePanelLayout: EditorSidePanelLayout = $derived(
-  getEditorSidePanelLayout({
-    outlineOpen: outlineWantedOpen,
-    syntaxOpen: syntaxWantedOpen,
-    syntaxMaximized,
-    available: sidePanelsAvailable
-  })
-);
-const sidePanelsVisible = $derived(sidePanelLayout !== 'none');
-const outlineVisible = $derived(sidePanelLayout === 'outline' || sidePanelLayout === 'stacked');
-const syntaxVisible = $derived(
-  sidePanelLayout === 'syntax' || sidePanelLayout === 'stacked' || sidePanelLayout === 'syntaxMaximized'
-);
-const syntaxMaximizeAllowed = $derived(outlineWantedOpen && syntaxWantedOpen);
-const singleViewActive = $derived(editorViewMode !== 'both');
-const editorLayoutToggleLabel = $derived(getEditorLayoutToggleLabel({
-  splitBothIsCompact,
-  stackedCanReturnToCompact,
-  editorLayout
-}));
-const editorLayoutToggleIcon = $derived(getEditorLayoutToggleIcon({
-  stackedCanReturnToCompact,
-  editorLayout
-}));
-const singleViewReturnLabel = EDITOR_SINGLE_VIEW_RETURN_LABEL;
-const editViewToggleLabel = $derived(getEditorEditViewToggleLabel({
-  editorViewMode,
-  splitBothIsCompact
-}));
-const previewViewToggleLabel = $derived(getEditorPreviewViewToggleLabel(editorViewMode));
-const compactPaneToggleText = $derived(getEditorCompactPaneToggleText(compactPaneMode));
-const compactPaneToggleLabel = $derived(getEditorCompactPaneToggleLabel(compactPaneMode));
-const outlineToggleLabel = $derived(outlineWantedOpen ? '关闭目录' : '打开目录');
-const outlineControlDisabled = $derived(!outlineWantedOpen && !sidePanelsAvailable);
-const syntaxToggleLabel = $derived(syntaxWantedOpen ? '关闭语法实例' : '打开语法实例');
-const syntaxControlDisabled = $derived(!syntaxWantedOpen && !sidePanelsAvailable);
-const lineNumbersToggleLabel = $derived(lineNumbersEnabled ? '隐藏行号' : '显示行号');
 const exportHref = $derived(buildContentExportHref(exportEndpoint, collection, entryId));
 const scrollSyncAvailable = $derived(
-  effectiveViewMode === 'both' && Boolean(bodyScrollElement && previewScrollElement)
+  shell.effectiveViewMode === 'both' && Boolean(bodyScrollElement && previewScrollElement)
 );
 const scrollSyncToggleLabel = $derived(getEditorScrollSyncToggleLabel({
   available: scrollSyncAvailable,
@@ -263,7 +183,7 @@ const scrollSyncToggleLabel = $derived(getEditorScrollSyncToggleLabel({
 const scrollSyncControlDisabled = $derived(!scrollSyncAvailable);
 const scrollTopControlDisabled = $derived(!bodyScrollElement && !previewScrollElement);
 const markdownOutlineItems = $derived(
-  essayOutlineEnabled && outlineVisible && outlineActiveTab === 'headings'
+  essayOutlineEnabled && shell.outlineVisible && shell.outlineActiveTab === 'headings'
     ? extractMarkdownOutline(body)
     : []
 );
@@ -300,100 +220,6 @@ const syncDirtyStatus = () => {
   if (isDirty) {
     clearStatus();
   }
-};
-
-const toggleEditorLayout = () => {
-  if (singleViewActive) return;
-
-  const nextLayout = editorLayout === 'split' ? 'stacked' : 'split';
-  explicitEditorLayout = nextLayout;
-  if (!readDevAdminEditorDefaults()) {
-    storeEditorLayout(ADMIN_EDITOR_LAYOUT_STORAGE_KEY, nextLayout);
-  }
-};
-
-const toggleEditorViewMode = (viewMode: Exclude<EditorViewMode, 'both'>) => {
-  editorViewMode = editorViewMode === viewMode ? 'both' : viewMode;
-};
-
-const returnToBothView = () => {
-  editorViewMode = 'both';
-};
-
-const toggleCompactPaneMode = () => {
-  compactPaneMode = compactPaneMode === 'edit' ? 'preview' : 'edit';
-};
-
-const storeCurrentSidePanelPreference = (
-  preference: Partial<{
-    outlineOpen: boolean;
-    outlineActiveTab: EditorOutlineTab;
-    syntaxOpen: boolean;
-  }> = {}
-) => {
-  if (readDevAdminEditorDefaults()) return;
-
-  storeEditorSidePanelPreference(ADMIN_EDITOR_SIDE_PANEL_PREFERENCE_STORAGE_KEY, {
-    outlineOpen: preference.outlineOpen ?? outlineWantedOpen,
-    outlineActiveTab: preference.outlineActiveTab ?? outlineActiveTab,
-    syntaxOpen: preference.syntaxOpen ?? syntaxWantedOpen
-  });
-};
-
-const storeCurrentDisplayPreference = (preference: Partial<EditorDisplayPreference> = {}) => {
-  const currentPreference: EditorDisplayPreference = {
-    lineNumbers: lineNumbersEnabled,
-    markdownHighlightTheme
-  };
-
-  storeEditorDisplayPreference(
-    ADMIN_EDITOR_DISPLAY_PREFERENCE_STORAGE_KEY,
-    mergeEditorDisplayPreference(currentPreference, preference)
-  );
-};
-
-const toggleOutline = () => {
-  if (outlineWantedOpen) {
-    outlineWantedOpen = false;
-    storeCurrentSidePanelPreference({ outlineOpen: false });
-    return;
-  }
-
-  outlineWantedOpen = true;
-  storeCurrentSidePanelPreference({ outlineOpen: true });
-};
-
-const toggleSyntax = () => {
-  if (syntaxWantedOpen) {
-    syntaxWantedOpen = false;
-    syntaxMaximized = false;
-    storeCurrentSidePanelPreference({ syntaxOpen: false });
-    return;
-  }
-
-  syntaxWantedOpen = true;
-  syntaxMaximized = false;
-  storeCurrentSidePanelPreference({ syntaxOpen: true });
-};
-
-const toggleLineNumbers = () => {
-  lineNumbersEnabled = !lineNumbersEnabled;
-  storeCurrentDisplayPreference({ lineNumbers: lineNumbersEnabled });
-};
-
-const selectMarkdownHighlightTheme = (theme: MarkdownHighlightTheme) => {
-  markdownHighlightTheme = theme;
-  storeCurrentDisplayPreference({ markdownHighlightTheme: theme });
-};
-
-const toggleSyntaxMaximize = () => {
-  if (!syntaxMaximizeAllowed) return;
-  syntaxMaximized = !syntaxMaximized;
-};
-
-const setOutlineTab = (tab: EditorOutlineTab) => {
-  outlineActiveTab = tab;
-  storeCurrentSidePanelPreference({ outlineActiveTab: tab });
 };
 
 const closeImageInsert = () => {
@@ -462,7 +288,7 @@ const toggleScrollSync = () => {
 };
 
 const scrollEditorPanesToTop = () => {
-  scrollSyncController.scrollToTop(effectiveViewMode);
+  scrollSyncController.scrollToTop(shell.effectiveViewMode);
 };
 
 const waitForAnimationFrame = (): Promise<void> =>
@@ -501,8 +327,8 @@ const handleBodyOutlineJump = (element: HTMLElement) => {
 };
 
 const handleOutlineHeadingSelect = (item: MarkdownOutlineItem) => {
-  const shouldScrollBody = effectiveViewMode !== 'preview';
-  const shouldScrollPreview = effectiveViewMode !== 'edit';
+  const shouldScrollBody = shell.effectiveViewMode !== 'preview';
+  const shouldScrollPreview = shell.effectiveViewMode !== 'edit';
   let bodyScrolled = false;
   let previewScrolled = false;
 
@@ -543,7 +369,7 @@ const runPendingPreviewOutlineJump = async (outlineKey: string) => {
     jumpId !== pendingPreviewOutlineJumpId
     || pendingPreviewOutlineKey !== outlineKey
     || previewBusy
-    || effectiveViewMode === 'edit'
+    || shell.effectiveViewMode === 'edit'
   ) {
     return;
   }
@@ -706,9 +532,6 @@ const resetFrontmatterToBaseline = () => {
   clearStatus();
 };
 
-const readDevAdminEditorDefaults = () =>
-  import.meta.env.DEV ? readStoredAdminEditorDefaults(ADMIN_EDITOR_DEFAULTS_STORAGE_KEY) : null;
-
 const closeActionMenu = (target: EventTarget | null) => {
   if (target instanceof HTMLElement) {
     closeClosestAdminDetailsMenu(target, '.admin-editor-shell__action-more');
@@ -799,46 +622,15 @@ $effect(() => {
 });
 
 $effect(() => {
-  if (editorPreferencesRestored) return;
-  editorPreferencesRestored = true;
-
-  const restoredPreferences = readRestoredEditorPreferences({
-    layoutStorageKey: ADMIN_EDITOR_LAYOUT_STORAGE_KEY,
-    displayPreferenceStorageKey: ADMIN_EDITOR_DISPLAY_PREFERENCE_STORAGE_KEY,
-    sidePanelPreferenceStorageKey: ADMIN_EDITOR_SIDE_PANEL_PREFERENCE_STORAGE_KEY,
-    adminDefaults: readDevAdminEditorDefaults()
-  });
-
-  explicitEditorLayout = restoredPreferences.layout;
-  lineNumbersEnabled = restoredPreferences.display.lineNumbers;
-  markdownHighlightTheme = restoredPreferences.display.markdownHighlightTheme;
-
-  const sidePanelPreference = restoredPreferences.sidePanel;
-  if (!sidePanelPreference) return;
-
-  outlineWantedOpen = sidePanelPreference.outlineOpen;
-  outlineActiveTab = sidePanelPreference.outlineActiveTab;
-  syntaxWantedOpen = sidePanelPreference.syntaxOpen;
+  shell.restorePreferences();
 });
 
 $effect(() => {
-  return observeElementInlineSize({
-    element: editorShellEl,
-    onInlineSize: (nextInlineSize) => {
-      editorShellInlineSize = nextInlineSize;
-    }
-  });
-});
-
-$effect(() => {
-  return mountEditorPageActionsPortal({
-    actionsEl: topActionsEl,
-    hostSelector: PAGE_ACTIONS_HOST_SELECTOR
-  });
-});
-
-$effect(() => {
-  return bindEditorPageIntegration({
+  return createEditorPageLifecycle({
+    shellElement: editorShellEl,
+    actionsElement: topActionsEl,
+    pageActionsHostSelector: PAGE_ACTIONS_HOST_SELECTOR,
+    onInlineSize: shell.setInlineSize,
     detailsMenuSelectors: ADMIN_EDITOR_DETAILS_MENU_SELECTORS,
     navigationGuard: {
       isDirty: () => isDirty,
@@ -857,7 +649,7 @@ $effect(() => {
 $effect(() => {
   const bodyElement = bodyScrollElement;
   const previewElement = previewScrollElement;
-  if (!bodyElement || !previewElement || effectiveViewMode !== 'both') return;
+  if (!bodyElement || !previewElement || shell.effectiveViewMode !== 'both') return;
 
   const handleBodyScroll = () => {
     handleEditorPaneScroll('body');
@@ -892,7 +684,7 @@ $effect(() => {
 
 $effect(() => {
   const outlineKey = pendingPreviewOutlineKey;
-  if (!outlineKey || previewBusy || effectiveViewMode === 'edit') return;
+  if (!outlineKey || previewBusy || shell.effectiveViewMode === 'edit') return;
 
   void runPendingPreviewOutlineJump(outlineKey);
 });
@@ -921,9 +713,7 @@ $effect(() => {
 });
 
 $effect(() => {
-  if (!syntaxMaximizeAllowed && syntaxMaximized) {
-    syntaxMaximized = false;
-  }
+  shell.syncSyntaxMaximized();
 });
 
 $effect(() => {
@@ -961,52 +751,52 @@ $effect(() => {
 <section
   class="admin-editor-shell"
   bind:this={editorShellEl}
-  data-layout={editorLayout}
-  data-view={editorViewMode}
-  data-effective-view={effectiveViewMode}
-  data-side-panel={sidePanelLayout}
+  data-layout={shell.layout}
+  data-view={shell.viewMode}
+  data-effective-view={shell.effectiveViewMode}
+  data-side-panel={shell.sidePanelLayout}
 >
   <EditorTopControls
     bind:actionMenuElement={topActionsEl}
     {busy}
     bodyToolsEnabled={bodyEditingEnabled}
-    outlineOpen={outlineWantedOpen}
-    {outlineVisible}
-    {outlineToggleLabel}
-    {outlineControlDisabled}
+    outlineOpen={shell.outlineOpen}
+    outlineVisible={shell.outlineVisible}
+    outlineToggleLabel={shell.outlineToggleLabel}
+    outlineControlDisabled={shell.outlineControlDisabled}
     outlinePanelId={OUTLINE_PANEL_ID}
-    syntaxOpen={syntaxWantedOpen}
-    {syntaxVisible}
-    {syntaxToggleLabel}
-    {syntaxControlDisabled}
+    syntaxOpen={shell.syntaxOpen}
+    syntaxVisible={shell.syntaxVisible}
+    syntaxToggleLabel={shell.syntaxToggleLabel}
+    syntaxControlDisabled={shell.syntaxControlDisabled}
     syntaxPanelId={SYNTAX_PANEL_ID}
-    {lineNumbersEnabled}
-    {lineNumbersToggleLabel}
-    {markdownHighlightTheme}
-    editorLayoutIsSplit={editorLayout === 'split'}
-    {editorLayoutToggleLabel}
-    {editorLayoutToggleIcon}
-    {singleViewActive}
-    {singleViewReturnLabel}
-    {splitBothIsCompact}
-    {compactPaneToggleLabel}
-    {compactPaneToggleText}
-    {editViewToggleLabel}
-    {previewViewToggleLabel}
-    {effectiveViewMode}
+    lineNumbersEnabled={shell.lineNumbers}
+    lineNumbersToggleLabel={shell.lineNumbersToggleLabel}
+    markdownHighlightTheme={shell.markdownHighlightTheme}
+    editorLayoutIsSplit={shell.layout === 'split'}
+    editorLayoutToggleLabel={shell.layoutToggleLabel}
+    editorLayoutToggleIcon={shell.layoutToggleIcon}
+    singleViewActive={shell.singleViewActive}
+    singleViewReturnLabel={shell.singleViewReturnLabel}
+    splitBothIsCompact={shell.splitBothIsCompact}
+    compactPaneToggleLabel={shell.compactPaneToggleLabel}
+    compactPaneToggleText={shell.compactPaneToggleText}
+    editViewToggleLabel={shell.editViewToggleLabel}
+    previewViewToggleLabel={shell.previewViewToggleLabel}
+    effectiveViewMode={shell.effectiveViewMode}
     onApplyTool={markdownCommandDispatcher.applyTool}
     onApplyHeading={markdownCommandDispatcher.applyHeading}
     onApplyCallout={markdownCommandDispatcher.applyCallout}
     onInsertText={markdownCommandDispatcher.insertText}
     onOpenGallery={openGalleryInsert}
-    onToggleOutline={toggleOutline}
-    onToggleSyntax={toggleSyntax}
-    onToggleLineNumbers={toggleLineNumbers}
-    onSelectMarkdownHighlightTheme={selectMarkdownHighlightTheme}
-    onToggleLayout={toggleEditorLayout}
-    onToggleView={toggleEditorViewMode}
-    onReturnToBothView={returnToBothView}
-    onToggleCompactPane={toggleCompactPaneMode}
+    onToggleOutline={shell.toggleOutline}
+    onToggleSyntax={shell.toggleSyntax}
+    onToggleLineNumbers={shell.toggleLineNumbers}
+    onSelectMarkdownHighlightTheme={shell.selectMarkdownHighlightTheme}
+    onToggleLayout={shell.toggleLayout}
+    onToggleView={shell.toggleViewMode}
+    onReturnToBothView={shell.returnToBothView}
+    onToggleCompactPane={shell.toggleCompactPaneMode}
     {statusText}
     {statusState}
     {canWriteContent}
@@ -1025,9 +815,9 @@ $effect(() => {
       disabled={busy}
       {toolbarCommand}
       {outlineJumpCommand}
-      {lineNumbersEnabled}
-      {markdownHighlightTheme}
-      {effectiveViewMode}
+      lineNumbersEnabled={shell.lineNumbers}
+      markdownHighlightTheme={shell.markdownHighlightTheme}
+      effectiveViewMode={shell.effectiveViewMode}
       {bodyLineCount}
       {bodyCharCount}
       {errors}
@@ -1044,11 +834,11 @@ $effect(() => {
       galleryEditEnabled={galleryInsertEnabled}
       {previewHtml}
       previewBusy={previewBusy}
-      {sidePanelsVisible}
-      {sidePanelLayout}
+      sidePanelsVisible={shell.sidePanelsVisible}
+      sidePanelLayout={shell.sidePanelLayout}
       outlinePanelId={OUTLINE_PANEL_ID}
       syntaxPanelId={SYNTAX_PANEL_ID}
-      {outlineActiveTab}
+      outlineActiveTab={shell.outlineActiveTab}
       {markdownOutlineItems}
       {outlineListItems}
       onBodyScrollElementChange={setBodyScrollElement}
@@ -1059,9 +849,9 @@ $effect(() => {
       onShortcutTool={markdownCommandDispatcher.applyTool}
       onToggleScrollSync={toggleScrollSync}
       onScrollToTop={scrollEditorPanesToTop}
-      onOutlineTabChange={setOutlineTab}
+      onOutlineTabChange={shell.setOutlineTab}
       onOutlineHeadingSelect={handleOutlineHeadingSelect}
-      onSyntaxMaximizeToggle={toggleSyntaxMaximize}
+      onSyntaxMaximizeToggle={shell.toggleSyntaxMaximize}
     />
   {/if}
 

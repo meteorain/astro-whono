@@ -27,6 +27,9 @@ import {
 import {
   loadAdminContentEditDevState
 } from './admin-content-edit-dev-state';
+import type {
+  AdminContentEditorIslandComponent
+} from './admin-content-editor-islands';
 
 type Props = {
   collection: AdminContentWriteCollectionKey;
@@ -61,7 +64,7 @@ const editorRegistration = workspaceEditorPayload
   : null;
 // Keep Svelte islands behind DEV-only dynamic imports; static imports leak
 // editor chunks into the production build.
-let EditorIsland: any = null;
+let EditorIsland: AdminContentEditorIslandComponent | null = null;
 if (import.meta.env.DEV && editorRegistration) {
   const { loadAdminContentEditorIsland } = await import('./admin-content-editor-islands');
   EditorIsland = await loadAdminContentEditorIsland(editorRegistration.island);

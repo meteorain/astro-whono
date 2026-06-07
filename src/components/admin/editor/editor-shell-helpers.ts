@@ -93,30 +93,24 @@ export const EDITOR_SIDE_PANEL_OUTLINE_MIN_BLOCK_SIZE = 120;
 export const EDITOR_SIDE_PANEL_SYNTAX_MIN_BLOCK_SIZE = 150;
 const EDITOR_SIDE_PANEL_STACKED_RATIO_MIN_PERCENT = 20;
 const EDITOR_SIDE_PANEL_STACKED_RATIO_MAX_PERCENT = 80;
-const WRITE_FIELD_LABELS: Readonly<Record<string, string>> = {
-  title: '标题',
-  description: '摘要',
-  date: '日期',
-  publishedAt: '发布时间',
-  tags: '标签',
-  draft: '草稿状态',
-  archive: '归档状态',
-  slug: '链接别名',
-  cover: '封面图',
-  badge: '徽标',
-  body: '正文'
-};
+const PREVIEW_DEBOUNCE_TIERS: readonly [minLength: number, delayMs: number][] = [
+  [12000, 700],
+  [6000, 480],
+  [3000, 320]
+];
+const DEFAULT_PREVIEW_DEBOUNCE_MS = 220;
 
 export const getPreviewDebounceMs = (source: string): number => {
   const length = source.length;
-  if (length >= 12000) return 700;
-  if (length >= 6000) return 480;
-  if (length >= 3000) return 320;
-  return 220;
+  return PREVIEW_DEBOUNCE_TIERS.find(([minLength]) => length >= minLength)?.[1]
+    ?? DEFAULT_PREVIEW_DEBOUNCE_MS;
 };
 
 export const normalizeEditorBodyValue = (value: string): string =>
   value.replace(/\r\n?/g, '\n');
+
+export const getEditorBodyCharCount = (body: string): number =>
+  Array.from(body).length;
 
 export const getEditorBodyValueSyncReplacement = (
   currentValue: string,
@@ -179,8 +173,6 @@ export const markScrollElementScrolling = (
     }, timeoutMs)
   );
 };
-
-export const getWriteFieldLabel = (field: string): string => WRITE_FIELD_LABELS[field] ?? field;
 
 export const getEditorOutlineMinInlineSize = (
   layout: EditorLayoutMode,

@@ -1,6 +1,7 @@
+import type { AstroComponentFactory } from 'astro/runtime/server/index.js';
 import type { AdminContentEditorIslandKey } from './admin-content-editor-registry';
 
-export type AdminContentEditorIslandComponent = any;
+export type AdminContentEditorIslandComponent = AstroComponentFactory;
 
 export const ADMIN_CONTENT_EDITOR_ISLAND_KEYS = ['essay', 'bits', 'memo', 'about'] as const satisfies readonly AdminContentEditorIslandKey[];
 

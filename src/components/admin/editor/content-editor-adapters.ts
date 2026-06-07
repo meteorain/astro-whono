@@ -11,7 +11,6 @@ import {
   getAdminAboutWriteFieldLabel,
   isAdminAboutFrontmatterIssuePath
 } from '../../../lib/admin-console/content-about-contract';
-import { getWriteFieldLabel } from './editor-shell-helpers';
 
 type ContentEditorCapabilities = {
   body: boolean;
@@ -23,15 +22,17 @@ type ContentEditorCapabilities = {
   delete: boolean;
 };
 
-export type ContentEditorAdapter = {
+export type ContentEditorAdapter<
+  Values extends AdminContentWorkspaceEditorValues = AdminContentWorkspaceEditorValues
+> = {
   collection: AdminContentWriteCollectionKey;
   capabilities: ContentEditorCapabilities;
   frontmatterIssuePaths: ReadonlySet<string>;
   isFrontmatterIssuePath: (path: string) => boolean;
-  cloneValues: (value: AdminContentWorkspaceEditorValues) => AdminContentWorkspaceEditorValues;
-  isEqualValues: (left: AdminContentWorkspaceEditorValues | null, right: AdminContentWorkspaceEditorValues | null) => boolean;
+  cloneValues: (value: Values) => Values;
+  isEqualValues: (left: Values | null, right: Values | null) => boolean;
   getWriteFieldLabel: (field: string) => string;
-  getDeleteTitle: (value: AdminContentWorkspaceEditorValues, entryId: string) => string;
+  getDeleteTitle: (value: Values, entryId: string) => string;
 };
 
 const cloneEssayValues = (value: AdminEssayEditorValues): AdminEssayEditorValues => ({
@@ -74,22 +75,9 @@ export const isEssayEditorValues = (value: AdminContentWorkspaceEditorValues | n
 export const isBitsEditorValues = (value: AdminContentWorkspaceEditorValues | null): value is AdminBitsEditorValues =>
   Boolean(value && 'authorName' in value && 'authorAvatar' in value && 'imagesText' in value);
 
-export const isMemoEditorValues = (value: AdminContentWorkspaceEditorValues | null): value is AdminMemoEditorValues =>
-  Boolean(value && 'subtitle' in value && !('description' in value));
-
-export const isAboutEditorValues = (value: AdminContentWorkspaceEditorValues | null): value is AdminAboutEditorValues =>
-  Boolean(value && Object.keys(value).length === 0);
-
-const cloneContentEditorValues = (value: AdminContentWorkspaceEditorValues): AdminContentWorkspaceEditorValues => {
-  if (isEssayEditorValues(value)) return cloneEssayValues(value);
-  if (isBitsEditorValues(value)) return cloneBitsValues(value);
-  if (isAboutEditorValues(value)) return cloneAboutValues();
-  return cloneMemoValues(value);
-};
-
-const isEqualContentEditorValues = (
-  left: AdminContentWorkspaceEditorValues | null,
-  right: AdminContentWorkspaceEditorValues | null
+const isEqualContentEditorValues = <Values extends AdminContentWorkspaceEditorValues>(
+  left: Values | null,
+  right: Values | null
 ): boolean =>
   JSON.stringify(left) === JSON.stringify(right);
 
@@ -97,7 +85,7 @@ const getContentWriteFieldLabel = (
   field: string,
   labels: Readonly<Record<string, string>>
 ): string =>
-  labels[field] ?? getWriteFieldLabel(field);
+  labels[field] ?? field;
 
 const hasExactFrontmatterIssuePath = (paths: ReadonlySet<string>, path: string): boolean =>
   paths.has(path);
@@ -180,7 +168,7 @@ const buildContentEditorCapabilities = (
   };
 };
 
-const ESSAY_ADAPTER: ContentEditorAdapter = {
+const ESSAY_ADAPTER: ContentEditorAdapter<AdminEssayEditorValues> = {
   collection: 'essay',
   capabilities: buildContentEditorCapabilities('essay', {
     body: true,
@@ -192,13 +180,13 @@ const ESSAY_ADAPTER: ContentEditorAdapter = {
   }),
   frontmatterIssuePaths: ESSAY_FRONTMATTER_ISSUE_PATHS,
   isFrontmatterIssuePath: (path) => hasExactFrontmatterIssuePath(ESSAY_FRONTMATTER_ISSUE_PATHS, path),
-  cloneValues: cloneContentEditorValues,
+  cloneValues: cloneEssayValues,
   isEqualValues: isEqualContentEditorValues,
   getWriteFieldLabel: (field) => getContentWriteFieldLabel(field, ESSAY_FIELD_LABELS),
-  getDeleteTitle: (value, entryId) => isEssayEditorValues(value) ? value.title || entryId : entryId
+  getDeleteTitle: (value, entryId) => value.title || entryId
 };
 
-const BITS_ADAPTER: ContentEditorAdapter = {
+const BITS_ADAPTER: ContentEditorAdapter<AdminBitsEditorValues> = {
   collection: 'bits',
   capabilities: buildContentEditorCapabilities('bits', {
     body: true,
@@ -210,13 +198,13 @@ const BITS_ADAPTER: ContentEditorAdapter = {
   }),
   frontmatterIssuePaths: BITS_FRONTMATTER_ISSUE_PATHS,
   isFrontmatterIssuePath: isBitsFrontmatterIssuePath,
-  cloneValues: cloneContentEditorValues,
+  cloneValues: cloneBitsValues,
   isEqualValues: isEqualContentEditorValues,
   getWriteFieldLabel: (field) => getContentWriteFieldLabel(field, BITS_FIELD_LABELS),
-  getDeleteTitle: (value, entryId) => isBitsEditorValues(value) ? value.title || entryId : entryId
+  getDeleteTitle: (value, entryId) => value.title || entryId
 };
 
-const MEMO_ADAPTER: ContentEditorAdapter = {
+const MEMO_ADAPTER: ContentEditorAdapter<AdminMemoEditorValues> = {
   collection: 'memo',
   capabilities: buildContentEditorCapabilities('memo', {
     body: true,
@@ -228,13 +216,13 @@ const MEMO_ADAPTER: ContentEditorAdapter = {
   }),
   frontmatterIssuePaths: MEMO_FRONTMATTER_ISSUE_PATHS,
   isFrontmatterIssuePath: (path) => hasExactFrontmatterIssuePath(MEMO_FRONTMATTER_ISSUE_PATHS, path),
-  cloneValues: cloneContentEditorValues,
+  cloneValues: cloneMemoValues,
   isEqualValues: isEqualContentEditorValues,
   getWriteFieldLabel: (field) => getContentWriteFieldLabel(field, MEMO_FIELD_LABELS),
-  getDeleteTitle: (value, entryId) => isMemoEditorValues(value) ? value.title || entryId : entryId
+  getDeleteTitle: (value, entryId) => value.title || entryId
 };
 
-const ABOUT_ADAPTER: ContentEditorAdapter = {
+const ABOUT_ADAPTER: ContentEditorAdapter<AdminAboutEditorValues> = {
   collection: 'about',
   capabilities: buildContentEditorCapabilities('about', {
     body: true,
@@ -246,10 +234,17 @@ const ABOUT_ADAPTER: ContentEditorAdapter = {
   }),
   frontmatterIssuePaths: new Set<string>(),
   isFrontmatterIssuePath: isAdminAboutFrontmatterIssuePath,
-  cloneValues: cloneContentEditorValues,
+  cloneValues: cloneAboutValues,
   isEqualValues: isEqualContentEditorValues,
   getWriteFieldLabel: getAdminAboutWriteFieldLabel,
   getDeleteTitle: () => '关于'
+};
+
+type ContentEditorAdapterMap = {
+  essay: ContentEditorAdapter<AdminEssayEditorValues>;
+  bits: ContentEditorAdapter<AdminBitsEditorValues>;
+  memo: ContentEditorAdapter<AdminMemoEditorValues>;
+  about: ContentEditorAdapter<AdminAboutEditorValues>;
 };
 
 const CONTENT_EDITOR_ADAPTERS = {
@@ -257,7 +252,9 @@ const CONTENT_EDITOR_ADAPTERS = {
   bits: BITS_ADAPTER,
   memo: MEMO_ADAPTER,
   about: ABOUT_ADAPTER
-} as const satisfies Record<AdminContentWriteCollectionKey, ContentEditorAdapter>;
+} as const satisfies ContentEditorAdapterMap;
 
-export const getContentEditorAdapter = (collection: AdminContentWriteCollectionKey): ContentEditorAdapter =>
+export const getContentEditorAdapter = <Collection extends AdminContentWriteCollectionKey>(
+  collection: Collection
+): ContentEditorAdapterMap[Collection] =>
   CONTENT_EDITOR_ADAPTERS[collection];

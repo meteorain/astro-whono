@@ -102,6 +102,86 @@ describe('admin editor page integration', () => {
     return { TestElement, TestAnchorElement, TestButtonElement };
   };
 
+  it('composes inline size observer, page actions portal, and page integration cleanup', async () => {
+    const { createEditorPageLifecycle } = await import(
+      '../src/components/admin/editor/editor-page-lifecycle'
+    );
+    const documentRoot = createDocumentRoot();
+    const windowRef = createWindowRef();
+    const disconnect = vi.fn();
+    const observe = vi.fn();
+    const replaceWith = vi.fn();
+    const onInlineSize = vi.fn();
+    const originalParent = {
+      insertBefore: vi.fn()
+    };
+    const host = {
+      append: vi.fn()
+    };
+    const placeholder = {
+      parentNode: {},
+      replaceWith
+    };
+    const actionsElement = {
+      parentNode: originalParent,
+      nextSibling: null
+    } as unknown as HTMLElement;
+    const shellElement = {
+      getBoundingClientRect: () => ({ width: 880 })
+    } as HTMLElement;
+
+    class ResizeObserverStub {
+      constructor(private callback: ResizeObserverCallback) {}
+
+      observe(element: Element) {
+        observe(element);
+        this.callback([
+          {
+            contentRect: { width: 900 }
+          } as ResizeObserverEntry
+        ], this as unknown as ResizeObserver);
+      }
+
+      disconnect = disconnect;
+    }
+
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    documentRoot.querySelector = vi.fn(() => host);
+    documentRoot.createComment = vi.fn(() => placeholder as unknown as Comment);
+
+    const cleanup = createEditorPageLifecycle({
+      shellElement,
+      actionsElement,
+      pageActionsHostSelector: '[data-actions-host]',
+      onInlineSize,
+      detailsMenuSelectors: ['.preview-menu'],
+      navigationGuard: {
+        isDirty: () => false,
+        message: 'confirm leave',
+        onBlocked: vi.fn()
+      },
+      documentRoot,
+      windowRef
+    });
+
+    expect(cleanup).toEqual(expect.any(Function));
+    expect(onInlineSize).toHaveBeenNthCalledWith(1, 880);
+    expect(onInlineSize).toHaveBeenNthCalledWith(2, 900);
+    expect(observe).toHaveBeenCalledWith(shellElement);
+    expect(originalParent.insertBefore).toHaveBeenCalledWith(placeholder, actionsElement);
+    expect(host.append).toHaveBeenCalledWith(actionsElement);
+    expect(initAdminDetailsMenus).toHaveBeenCalledWith({
+      selector: '.preview-menu',
+      documentRoot
+    });
+
+    cleanup();
+
+    expect(disconnect).toHaveBeenCalledTimes(1);
+    expect(replaceWith).toHaveBeenCalledWith(actionsElement);
+    expect(detailsMenuCleanups.get('.preview-menu')).toHaveBeenCalledTimes(1);
+  });
+
   it('binds editor details, navigation guard, and article info trigger with one cleanup', async () => {
     const { bindEditorPageIntegration } = await import(
       '../src/components/admin/editor/editor-page-integration'
