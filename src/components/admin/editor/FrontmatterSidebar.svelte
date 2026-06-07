@@ -5,6 +5,7 @@ import type {
 import type {
   AdminContentWorkspaceEditorValues
 } from '../../../lib/admin-console/content-editor-payload';
+import { parseEssayDateInput } from '../../../utils/date-only';
 import AdminEditorIcon from './AdminEditorIcon.svelte';
 import {
   isBitsEditorValues,
@@ -44,6 +45,93 @@ const getIssue = (path: string): string =>
 const getIssueByPrefix = (prefix: string): string =>
   issues.find((issue) => issue.path.startsWith(prefix))?.message ?? '';
 
+const padDatePart = (value: number): string => String(value).padStart(2, '0');
+
+const formatLocalDateText = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = padDatePart(date.getMonth() + 1);
+  const day = padDatePart(date.getDate());
+  return `${year}-${month}-${day}`;
+};
+
+const getLocalDateText = (): string => formatLocalDateText(new Date());
+
+const getLocalTimezoneOffsetText = (date: Date): string => {
+  const offsetMinutes = -date.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  const absoluteOffsetMinutes = Math.abs(offsetMinutes);
+  const hours = padDatePart(Math.floor(absoluteOffsetMinutes / 60));
+  const minutes = padDatePart(absoluteOffsetMinutes % 60);
+  return `${sign}${hours}:${minutes}`;
+};
+
+const formatLocalDateTimeWithZoneText = (date: Date): string => {
+  const hours = padDatePart(date.getHours());
+  const minutes = padDatePart(date.getMinutes());
+  const seconds = padDatePart(date.getSeconds());
+  return `${formatLocalDateText(date)}T${hours}:${minutes}:${seconds}${getLocalTimezoneOffsetText(date)}`;
+};
+
+const getPublishedAtResult = (value: string) => {
+  const result = parseEssayDateInput(value);
+  return result?.publishedAt ? result : null;
+};
+
+const getPublishedAtSyncDate = (value: string): string =>
+  getPublishedAtResult(value)?.dateText ?? '';
+
+const getEffectivePublishDateResult = (date: string, publishedAt: string) =>
+  getPublishedAtResult(publishedAt) ?? parseEssayDateInput(date);
+
+const getPublishedAtInputIssue = (value: string): string =>
+  value.trim() && !getPublishedAtResult(value)
+    ? '需填写带时区的合法 ISO 日期时间'
+    : '';
+
+const getUpdatedAtInputIssue = (value: string, date: string, publishedAt: string): string => {
+  const trimmed = value.trim();
+  if (!trimmed) return '';
+
+  const result = parseEssayDateInput(trimmed);
+  if (!result) {
+    return '需填写 YYYY-MM-DD 或带时区的合法 ISO 日期时间';
+  }
+
+  const publishDateResult = getEffectivePublishDateResult(date, publishedAt);
+  return publishDateResult && result.date.valueOf() < publishDateResult.date.valueOf()
+    ? '更新日期不能早于发布日期'
+    : '';
+};
+
+const publishedAtSyncDate = $derived(
+  isEssayEditorValues(value) ? getPublishedAtSyncDate(value.publishedAt) : ''
+);
+const publishedAtSyncMessage = $derived(
+  isEssayEditorValues(value) && publishedAtSyncDate && value.date !== publishedAtSyncDate
+    ? `发布日期与详细时间不一致，保存后将自动更新发布日期为 ${publishedAtSyncDate}`
+    : ''
+);
+const publishedAtIssue = $derived(
+  getIssue('publishedAt') || (isEssayEditorValues(value) ? getPublishedAtInputIssue(value.publishedAt) : '')
+);
+const updatedAtIssue = $derived(
+  getIssue('updatedAt') || (isEssayEditorValues(value) ? getUpdatedAtInputIssue(value.updatedAt, value.date, value.publishedAt) : '')
+);
+
+const setPublishedAtNow = () => {
+  if (!isEssayEditorValues(value)) return;
+  const now = new Date();
+  value.date = formatLocalDateText(now);
+  value.publishedAt = formatLocalDateTimeWithZoneText(now);
+  onDirty?.();
+};
+
+const setUpdatedAtToday = () => {
+  if (!isEssayEditorValues(value)) return;
+  value.updatedAt = getLocalDateText();
+  onDirty?.();
+};
+
 const bitsImagesIssue = $derived(getIssue('imagesText') || getIssueByPrefix('images['));
 </script>
 
@@ -63,20 +151,30 @@ const bitsImagesIssue = $derived(getIssue('imagesText') || getIssueByPrefix('ima
           <p class="admin-content-editor__error" hidden={!getIssue('date')}>{getIssue('date')}</p>
         </div>
 
-        <div class="admin-field admin-content-editor__field" class:is-invalid={Boolean(getIssue('publishedAt'))}>
-          <div class="admin-editor-frontmatter__label-row">
-            <label class="admin-field__label" for="admin-essay-published-at">详细时间（可选）</label>
-            <button
-              class="admin-editor-frontmatter__hint-trigger"
-              type="button"
-              aria-label="详细时间说明"
-              aria-describedby="admin-essay-published-at-tip"
-            >
-              <AdminEditorIcon name="info" size={13} strokeWidth={2} />
-            </button>
-            <span id="admin-essay-published-at-tip" class="admin-editor-frontmatter__tooltip" role="tooltip">
-              按 ISO 格式填写，需包含时区；留空时仅使用发布日期。
+        <div class="admin-field admin-content-editor__field" class:is-invalid={Boolean(publishedAtIssue)}>
+          <div class="admin-editor-frontmatter__label-row admin-editor-frontmatter__label-row--with-action">
+            <span class="admin-editor-frontmatter__label-help">
+              <label class="admin-field__label" for="admin-essay-published-at">详细时间（可选）</label>
+              <button
+                class="admin-editor-frontmatter__hint-trigger"
+                type="button"
+                aria-label="详细时间说明"
+                aria-describedby="admin-essay-published-at-tip"
+              >
+                <AdminEditorIcon name="info" size={13} strokeWidth={2} />
+              </button>
+              <span id="admin-essay-published-at-tip" class="admin-editor-frontmatter__tooltip" role="tooltip">
+                按 ISO 日期时间填写，需包含时区，日期需与发布日期一致；留空时仅使用发布日期。
+              </span>
             </span>
+            <button
+              class="admin-editor-frontmatter__text-action"
+              type="button"
+              onclick={setPublishedAtNow}
+              disabled={disabled}
+            >
+              设为当前
+            </button>
           </div>
           <input
             id="admin-essay-published-at"
@@ -88,15 +186,64 @@ const bitsImagesIssue = $derived(getIssue('imagesText') || getIssueByPrefix('ima
             aria-describedby="admin-essay-published-at-tip"
             {disabled}
           />
-          <p class="admin-content-editor__error" hidden={!getIssue('publishedAt')}>{getIssue('publishedAt')}</p>
         </div>
+
+        <p class="admin-editor-frontmatter__note admin-editor-frontmatter__note--error admin-editor-frontmatter__note--wide" hidden={!publishedAtIssue}>
+          {publishedAtIssue}
+        </p>
+        <p class="admin-editor-frontmatter__note admin-editor-frontmatter__note--wide" hidden={!publishedAtSyncMessage}>
+          {publishedAtSyncMessage}
+        </p>
       </div>
 
-      <label class="admin-field admin-content-editor__field" class:is-invalid={Boolean(getIssue('badge'))}>
-        <span class="admin-field__label">badge</span>
-        <input class="admin-field__control" name="badge" type="text" bind:value={value.badge} {disabled} />
-        <p class="admin-content-editor__error" hidden={!getIssue('badge')}>{getIssue('badge')}</p>
-      </label>
+      <div class="admin-editor-frontmatter__datetime-grid">
+        <label class="admin-field admin-content-editor__field" class:is-invalid={Boolean(getIssue('badge'))}>
+          <span class="admin-field__label">badge</span>
+          <input class="admin-field__control" name="badge" type="text" bind:value={value.badge} {disabled} />
+          <p class="admin-content-editor__error" hidden={!getIssue('badge')}>{getIssue('badge')}</p>
+        </label>
+
+        <div class="admin-field admin-content-editor__field" class:is-invalid={Boolean(updatedAtIssue)}>
+          <div class="admin-editor-frontmatter__label-row admin-editor-frontmatter__label-row--with-action">
+            <span class="admin-editor-frontmatter__label-help">
+              <label class="admin-field__label" for="admin-essay-updated-at">更新日期（可选）</label>
+              <button
+                class="admin-editor-frontmatter__hint-trigger"
+                type="button"
+                aria-label="更新日期说明"
+                aria-describedby="admin-essay-updated-at-tip"
+              >
+                <AdminEditorIcon name="info" size={13} strokeWidth={2} />
+              </button>
+              <span id="admin-essay-updated-at-tip" class="admin-editor-frontmatter__tooltip" role="tooltip">
+                支持 YYYY-MM-DD 或 ISO 日期时间，需包含时区；填写后文章日期显示为“更新于：YYYY-MM-DD”。
+              </span>
+            </span>
+            <button
+              class="admin-editor-frontmatter__text-action"
+              type="button"
+              onclick={setUpdatedAtToday}
+              disabled={disabled}
+            >
+              设为今日
+            </button>
+          </div>
+          <input
+            id="admin-essay-updated-at"
+            class="admin-field__control"
+            name="updatedAt"
+            type="text"
+            bind:value={value.updatedAt}
+            placeholder="2026-01-02"
+            aria-describedby="admin-essay-updated-at-tip"
+            {disabled}
+          />
+        </div>
+
+        <p class="admin-editor-frontmatter__note admin-editor-frontmatter__note--error admin-editor-frontmatter__note--wide" hidden={!updatedAtIssue}>
+          {updatedAtIssue}
+        </p>
+      </div>
 
       <label class="admin-field admin-content-editor__field" class:is-invalid={Boolean(getIssue('description'))}>
         <span class="admin-field__label">摘要</span>

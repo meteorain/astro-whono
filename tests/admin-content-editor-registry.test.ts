@@ -44,6 +44,7 @@ const essayPayload: AdminEssayEditorPayload = {
     description: 'Essay description',
     date: '2026-06-01',
     publishedAt: '',
+    updatedAt: '',
     tagsText: 'tag',
     draft: false,
     archive: true,

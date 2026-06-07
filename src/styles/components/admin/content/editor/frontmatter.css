@@ -66,6 +66,18 @@
   min-width: 0;
 }
 
+.admin-editor-frontmatter__label-row--with-action {
+  justify-content: space-between;
+  width: 100%;
+}
+
+.admin-editor-frontmatter__label-help {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
 .admin-editor-frontmatter__hint-trigger {
   display: inline-grid;
   flex: 0 0 auto;
@@ -94,6 +106,58 @@
 .admin-editor-frontmatter__hint-trigger:focus-visible {
   outline: 0;
   box-shadow: 0 0 0 2px var(--admin-focus-ring);
+}
+
+.admin-editor-frontmatter__text-action {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: var(--admin-text-2xs);
+  line-height: 1.2;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 32%, transparent);
+  text-underline-offset: 3px;
+}
+
+.admin-editor-frontmatter__text-action:hover,
+.admin-editor-frontmatter__text-action:focus-visible {
+  color: var(--text);
+}
+
+.admin-editor-frontmatter__text-action:focus-visible {
+  outline: 0;
+  box-shadow: 0 2px 0 0 var(--admin-focus-ring);
+}
+
+.admin-editor-frontmatter__text-action:disabled {
+  color: color-mix(in srgb, var(--faint) 62%, transparent);
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.admin-editor-frontmatter__note {
+  margin: 0;
+  padding: 5px 8px;
+  border-inline-start: 2px solid var(--admin-status-warning-border);
+  border-radius: 4px;
+  background: var(--admin-status-warning-bg);
+  color: var(--admin-status-warning-text);
+  font-size: var(--admin-text-xs);
+  line-height: 1.5;
+}
+
+.admin-editor-frontmatter__note--wide {
+  grid-column: 1 / -1;
+}
+
+.admin-editor-frontmatter__note--error {
+  border-inline-start: 0;
+  background: color-mix(in srgb, var(--admin-error-accent) 6%, var(--panel) 94%);
+  color: var(--admin-error-accent);
 }
 
 .admin-editor-frontmatter__tooltip {

@@ -18,6 +18,7 @@ describe('admin content entry payload contract', () => {
     expect(payload.defaultPublicSlug).toBe('demo');
     if (payload.collection === 'essay') {
       expect(payload.values.publishedAt).toBe('');
+      expect(payload.values.updatedAt).toBe('');
     }
   });
 
@@ -83,6 +84,31 @@ describe('admin content entry payload contract', () => {
     if (payload.collection === 'essay') {
       expect(payload.values.date).toBe('2024-11-23');
       expect(payload.values.publishedAt).toBe('2024-11-23T18:00:00+08:00');
+    }
+  });
+
+  it('loads optional essay updatedAt as editable date text', async () => {
+    await writeFile(
+      path.join(getTempRoot(), 'src', 'content', 'essay', 'updated-date.md'),
+      [
+        '---',
+        'title: Updated Date',
+        'date: 2026-03-18',
+        'updatedAt: 2026-03-20T22:30:00+08:00',
+        'draft: false',
+        '---',
+        '',
+        'updated body',
+        ''
+      ].join('\n'),
+      'utf8'
+    );
+
+    const { readAdminContentEntryEditorPayload } = await import('../src/lib/admin-console/content-shared');
+    const payload = await readAdminContentEntryEditorPayload('essay', 'updated-date');
+
+    if (payload.collection === 'essay') {
+      expect(payload.values.updatedAt).toBe('2026-03-20');
     }
   });
 

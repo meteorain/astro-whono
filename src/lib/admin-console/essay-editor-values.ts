@@ -5,6 +5,7 @@ export const cloneFrontmatter = (value: AdminEssayEditorValues): AdminEssayEdito
   description: value.description,
   date: value.date,
   publishedAt: value.publishedAt,
+  updatedAt: value.updatedAt,
   tagsText: value.tagsText,
   draft: value.draft,
   archive: value.archive,

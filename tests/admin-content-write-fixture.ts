@@ -19,6 +19,12 @@ export const omitPublishedAt = (values: Record<string, unknown>): Record<string,
   return next;
 };
 
+export const omitUpdatedAt = (values: Record<string, unknown>): Record<string, unknown> => {
+  const next = { ...values };
+  delete next.updatedAt;
+  return next;
+};
+
 export const setupAdminContentWriteFixture = (): (() => string) => {
   let tempRoot = '';
 

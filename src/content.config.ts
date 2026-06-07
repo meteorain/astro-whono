@@ -36,7 +36,7 @@ const essaySchema = z.object(essayShape).transform((data, ctx) => {
     ctx.addIssue({
       code: 'custom',
       path: ['date'],
-      message: 'date must be a valid YYYY-MM-DD date or ISO 8601 datetime'
+      message: 'date must be a valid YYYY-MM-DD date or ISO 8601 datetime with timezone'
     });
     return z.NEVER;
   }
@@ -68,7 +68,7 @@ const essaySchema = z.object(essayShape).transform((data, ctx) => {
     ctx.addIssue({
       code: 'custom',
       path: ['updatedAt'],
-      message: 'updatedAt must be a valid YYYY-MM-DD date or ISO 8601 datetime'
+      message: 'updatedAt must be a valid YYYY-MM-DD date or ISO 8601 datetime with timezone'
     });
     return z.NEVER;
   }

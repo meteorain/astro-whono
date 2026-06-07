@@ -47,6 +47,7 @@ type AdminEssayFrontmatter = {
   description?: string;
   date: string;
   publishedAt?: string;
+  updatedAt?: string;
   tags: string[];
   draft: boolean;
   archive: boolean;
@@ -55,7 +56,7 @@ type AdminEssayFrontmatter = {
   badge?: string;
 };
 
-type AdminEssayPublishedAtInputMode = 'missing' | 'present';
+type AdminEssayOptionalInputMode = 'missing' | 'present';
 
 type AdminBitsImage = {
   src: string;
@@ -149,25 +150,31 @@ const parseAdminEssayEditorInput = (
   input: unknown
 ): {
   values?: AdminEssayEditorValues;
-  publishedAtInputMode: AdminEssayPublishedAtInputMode;
+  publishedAtInputMode: AdminEssayOptionalInputMode;
+  updatedAtInputMode: AdminEssayOptionalInputMode;
   issues: AdminContentValidationIssue[];
 } => {
   if (!isRecord(input)) {
     return {
       publishedAtInputMode: 'missing',
+      updatedAtInputMode: 'missing',
       issues: [createIssue('frontmatter', 'frontmatter 必须是对象')]
     };
   }
 
   const issues: AdminContentValidationIssue[] = [];
   const rawPublishedAtInput = input.publishedAt;
-  const hasPublishedAtInput = Object.prototype.hasOwnProperty.call(input, 'publishedAt')
+  const hasPublishedAtInput = hasOwn(input, 'publishedAt')
     && typeof rawPublishedAtInput === 'string';
+  const rawUpdatedAtInput = input.updatedAt;
+  const hasUpdatedAtInput = hasOwn(input, 'updatedAt')
+    && typeof rawUpdatedAtInput === 'string';
   const values: AdminEssayEditorValues = {
     title: getRequiredStringField(input, 'title', issues),
     description: getRequiredStringField(input, 'description', issues),
     date: getRequiredStringField(input, 'date', issues),
     publishedAt: hasPublishedAtInput ? rawPublishedAtInput : '',
+    updatedAt: hasUpdatedAtInput ? rawUpdatedAtInput : '',
     tagsText: getRequiredStringField(input, 'tagsText', issues),
     draft: getRequiredBooleanField(input, 'draft', issues),
     archive: getRequiredBooleanField(input, 'archive', issues),
@@ -177,8 +184,17 @@ const parseAdminEssayEditorInput = (
   };
 
   return issues.length > 0
-    ? { publishedAtInputMode: hasPublishedAtInput ? 'present' : 'missing', issues }
-    : { values, publishedAtInputMode: hasPublishedAtInput ? 'present' : 'missing', issues };
+    ? {
+        publishedAtInputMode: hasPublishedAtInput ? 'present' : 'missing',
+        updatedAtInputMode: hasUpdatedAtInput ? 'present' : 'missing',
+        issues
+      }
+    : {
+        values,
+        publishedAtInputMode: hasPublishedAtInput ? 'present' : 'missing',
+        updatedAtInputMode: hasUpdatedAtInput ? 'present' : 'missing',
+        issues
+      };
 };
 
 const parseAdminBitsEditorInput = (
@@ -281,6 +297,7 @@ const buildEssayFrontmatterFromValues = (
   values: AdminEssayEditorValues,
   options: {
     preservedPublishedAt?: string;
+    preservedUpdatedAt?: string;
   } = {}
 ): { frontmatter?: AdminEssayFrontmatter; issues: AdminContentValidationIssue[] } => {
   const issues: AdminContentValidationIssue[] = [];
@@ -304,16 +321,42 @@ const buildEssayFrontmatterFromValues = (
     issues.push(createIssue('publishedAt', 'essay.publishedAt 必须是带时区的 ISO 8601 日期时间'));
   }
 
+  const explicitUpdatedAt = values.updatedAt.trim();
+  const hasExplicitUpdatedAt = explicitUpdatedAt.length > 0;
+  const updatedAtResult = hasExplicitUpdatedAt
+    ? parseEssayDateInput(explicitUpdatedAt)
+    : null;
+
+  if (hasExplicitUpdatedAt && !updatedAtResult) {
+    issues.push(createIssue('updatedAt', 'essay.updatedAt 必须是 YYYY-MM-DD 或带时区的 ISO 8601 日期时间'));
+  }
+
   if (!dateResult || issues.length > 0) {
     return { issues };
   }
 
   const slug = values.slug.trim();
-  const date = dateResult.dateText;
   const preservedPublishedAt = normalizeOptionalText(options.preservedPublishedAt);
+  const preservedUpdatedAt = normalizeOptionalText(options.preservedUpdatedAt);
   const publishedAtText = hasExplicitPublishedAt
     ? explicitPublishedAt
     : dateResult.publishedAtText || preservedPublishedAt;
+  const updatedAtText = hasExplicitUpdatedAt
+    ? updatedAtResult?.dateText
+    : preservedUpdatedAt;
+  const publishedAtDateResult = publishedAtText ? parseEssayDateInput(publishedAtText) : null;
+  const date = publishedAtDateResult?.dateText ?? dateResult.dateText;
+  const effectiveDateResult = publishedAtDateResult ?? dateResult;
+  const finalUpdatedAtResult = hasExplicitUpdatedAt
+    ? updatedAtResult
+    : updatedAtText
+      ? parseEssayDateInput(updatedAtText)
+      : null;
+
+  if (finalUpdatedAtResult && finalUpdatedAtResult.date.valueOf() < effectiveDateResult.date.valueOf()) {
+    issues.push(createIssue('updatedAt', 'essay.updatedAt 不能早于 essay.date'));
+    return { issues };
+  }
 
   return {
     issues,
@@ -322,6 +365,7 @@ const buildEssayFrontmatterFromValues = (
       ...(values.description.trim() ? { description: values.description.trim() } : {}),
       date,
       ...(publishedAtText ? { publishedAt: publishedAtText } : {}),
+      ...(updatedAtText ? { updatedAt: updatedAtText } : {}),
       tags: parseTagsText(values.tagsText),
       draft: values.draft === true,
       archive: values.archive !== false,
@@ -499,6 +543,8 @@ type AdminEssayCurrentFrontmatter = {
   date: unknown;
   publishedAt: unknown;
   preservedPublishedAt?: string;
+  updatedAt: unknown;
+  preservedUpdatedAt?: string;
   tags: unknown;
   draft: unknown;
   archive: unknown;
@@ -525,6 +571,8 @@ const buildEssayCurrentFrontmatter = (state: AdminContentSourceState): AdminEssa
   const preservedPublishedAt = typeof currentPublishedAt === 'string'
     ? (parseEssayPublishedAtInput(currentPublishedAt) ? currentPublishedAt : undefined)
     : dateResult?.publishedAtText;
+  const currentUpdatedAt = getCurrentOptionalTextValue(frontmatter, 'updatedAt');
+  const currentUpdatedAtResult = parseEssayDateInput(currentUpdatedAt);
 
   return {
     title: getCurrentTextValue(frontmatter, 'title', ''),
@@ -532,6 +580,8 @@ const buildEssayCurrentFrontmatter = (state: AdminContentSourceState): AdminEssa
     date: currentDate,
     publishedAt: currentPublishedAt,
     ...(preservedPublishedAt ? { preservedPublishedAt } : {}),
+    updatedAt: currentUpdatedAtResult?.dateText ?? currentUpdatedAt,
+    ...(currentUpdatedAtResult ? { preservedUpdatedAt: currentUpdatedAtResult.dateText } : {}),
     tags: getCurrentStringArrayValue(frontmatter, 'tags', []),
     draft: getCurrentBooleanValue(frontmatter, 'draft', false),
     archive: getCurrentBooleanValue(frontmatter, 'archive', true),
@@ -615,14 +665,19 @@ const buildEssayWritePlan = async (
   values: AdminEssayEditorValues,
   bodyInput?: string,
   options: {
-    publishedAtInputMode?: AdminEssayPublishedAtInputMode;
+    publishedAtInputMode?: AdminEssayOptionalInputMode;
+    updatedAtInputMode?: AdminEssayOptionalInputMode;
   } = {}
 ): Promise<AdminWritePlan> => {
   const current = buildEssayCurrentFrontmatter(state);
   const shouldPreservePublishedAt = options.publishedAtInputMode === 'missing';
+  const shouldPreserveUpdatedAt = options.updatedAtInputMode === 'missing';
   const next = buildEssayFrontmatterFromValues(values, {
     ...(shouldPreservePublishedAt && current.preservedPublishedAt
       ? { preservedPublishedAt: current.preservedPublishedAt }
+      : {}),
+    ...(shouldPreserveUpdatedAt && current.preservedUpdatedAt
+      ? { preservedUpdatedAt: current.preservedUpdatedAt }
       : {})
   });
   if (!next.frontmatter) {
@@ -655,6 +710,7 @@ const buildEssayWritePlan = async (
     { field: 'description', path: ['description'], currentValue: current.description, nextValue: next.frontmatter.description },
     { field: 'date', path: ['date'], currentValue: current.date, nextValue: next.frontmatter.date },
     { field: 'publishedAt', path: ['publishedAt'], currentValue: current.publishedAt, nextValue: next.frontmatter.publishedAt },
+    { field: 'updatedAt', path: ['updatedAt'], currentValue: current.updatedAt, nextValue: next.frontmatter.updatedAt },
     { field: 'tags', path: ['tags'], currentValue: current.tags, nextValue: next.frontmatter.tags },
     { field: 'draft', path: ['draft'], currentValue: current.draft, nextValue: next.frontmatter.draft },
     { field: 'archive', path: ['archive'], currentValue: current.archive, nextValue: next.frontmatter.archive },
@@ -772,7 +828,8 @@ export const buildAdminContentWritePlanFromState = async (
     return {
       state,
       ...(await buildEssayWritePlan(state, parsed.values, bodyInput, {
-        publishedAtInputMode: parsed.publishedAtInputMode
+        publishedAtInputMode: parsed.publishedAtInputMode,
+        updatedAtInputMode: parsed.updatedAtInputMode
       }))
     };
   }

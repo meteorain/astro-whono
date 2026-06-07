@@ -21,6 +21,7 @@ export type AdminEssayEditorValues = {
   description: string;
   date: string;
   publishedAt: string;
+  updatedAt: string;
   tagsText: string;
   draft: boolean;
   archive: boolean;
@@ -124,6 +125,11 @@ const getDateString = (frontmatter: Record<string, unknown>, key: string, fallba
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback;
 };
 
+const getEssayDateText = (value: unknown): string => {
+  const parsed = parseEssayDateInput(value);
+  return parsed?.dateText ?? normalizeOptionalText(value);
+};
+
 const toEssayEditorValues = (state: AdminContentSourceState): AdminEssayEditorValues => {
   const frontmatter = state.rawFrontmatter;
   const rawDate = getDateString(frontmatter, 'date', '');
@@ -135,6 +141,7 @@ const toEssayEditorValues = (state: AdminContentSourceState): AdminEssayEditorVa
     description: normalizeOptionalText(frontmatter.description),
     date: dateResult?.dateText ?? rawDate,
     publishedAt: rawPublishedAt || dateResult?.publishedAtText || '',
+    updatedAt: getEssayDateText(frontmatter.updatedAt),
     tagsText: getStringArray(frontmatter.tags).join('\n'),
     draft: frontmatter.draft === true,
     archive: frontmatter.archive !== false,

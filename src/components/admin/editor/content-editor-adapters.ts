@@ -40,6 +40,7 @@ const cloneEssayValues = (value: AdminEssayEditorValues): AdminEssayEditorValues
   description: value.description,
   date: value.date,
   publishedAt: value.publishedAt,
+  updatedAt: value.updatedAt,
   tagsText: value.tagsText,
   draft: value.draft,
   archive: value.archive,
@@ -70,7 +71,7 @@ const cloneMemoValues = (value: AdminMemoEditorValues): AdminMemoEditorValues =>
 const cloneAboutValues = (): AdminAboutEditorValues => ({});
 
 export const isEssayEditorValues = (value: AdminContentWorkspaceEditorValues | null): value is AdminEssayEditorValues =>
-  Boolean(value && 'publishedAt' in value && 'archive' in value && 'cover' in value && 'badge' in value);
+  Boolean(value && 'publishedAt' in value && 'updatedAt' in value && 'archive' in value && 'cover' in value && 'badge' in value);
 
 export const isBitsEditorValues = (value: AdminContentWorkspaceEditorValues | null): value is AdminBitsEditorValues =>
   Boolean(value && 'authorName' in value && 'authorAvatar' in value && 'imagesText' in value);
@@ -94,6 +95,7 @@ const ESSAY_FRONTMATTER_ISSUE_PATHS = new Set([
   'title',
   'date',
   'publishedAt',
+  'updatedAt',
   'description',
   'tags',
   'slug',
@@ -122,6 +124,7 @@ const ESSAY_FIELD_LABELS: Readonly<Record<string, string>> = {
   description: '摘要',
   date: '日期',
   publishedAt: '发布时间',
+  updatedAt: '更新日期',
   tags: '标签',
   draft: '草稿状态',
   archive: '归档状态',
