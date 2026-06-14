@@ -215,6 +215,7 @@ describe('admin preview api', () => {
 
   it('renders about markdown-first preview with friend and FAQ directives', async () => {
     const { POST } = await import('../src/pages/api/admin/preview');
+    const { getThemeSettings } = await import('../src/lib/theme-settings');
 
     const response = await POST({
       request: createJsonRequest('http://127.0.0.1:4321/api/admin/preview', {
@@ -235,6 +236,8 @@ describe('admin preview api', () => {
           '',
           ':::faq{question="能编辑吗？"}',
           '可以。',
+          '',
+          '::site-info{name="Whono" url="https://astro.whono.me/" description="一个极简的双栏 Astro 主题" avatar="author/avatar.webp"}',
           ':::',
           '',
           '## 联系',
@@ -259,9 +262,18 @@ describe('admin preview api', () => {
     expect(payload.result.html).toContain('<div class="qa-list" aria-label="常见问题">');
     expect(payload.result.html).toContain('<summary class="qa-question">');
     expect(payload.result.html).toContain('能编辑吗？');
+    expect(payload.result.html).toContain('class="about-site-info"');
+    expect(payload.result.html).toContain('data-about-site-info-copy');
+    expect(payload.result.html).toContain('data-about-copy-text=');
+    expect(payload.result.html).toContain('<dt class="about-site-info__field-label">名称</dt>');
+    expect(payload.result.html).toContain('<dd class="about-site-info__field-value">Whono</dd>');
+    expect(payload.result.html).toContain('avatar: author/avatar.webp');
+    expect(payload.result.html).not.toContain('about-site-info__avatar');
+    expect(payload.result.html).not.toContain('about-site-info__eyebrow');
+    expect(payload.result.html).not.toContain('src="/author/avatar.webp"');
     expect(payload.result.html).toContain('class="contact-list"');
     expect(payload.result.html).toContain('href="https://github.com/cxro/astro-whono"');
-    expect(payload.result.html).toContain('href="mailto:Whono@linux.do"');
+    expect(payload.result.html).toContain(`href="mailto:${getThemeSettings().settings.site.socialLinks.email}"`);
     expect(payload.result.html).not.toContain('data-about-contact-links');
     expect(payload.result.html).not.toContain('javascript:alert');
     expect(payload.result.html).not.toContain('http://bad.example');

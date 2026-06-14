@@ -388,7 +388,10 @@ body.admin-page {
   --admin-sidebar-rail-action-display: none;
   --admin-sidebar-rail-details-display: none;
   --admin-sidebar-route-rail-display: none;
+  --admin-sidebar-route-rail-gap: 5px;
   --admin-sidebar-route-rail-margin-start: 0;
+  --admin-sidebar-route-rail-padding-block-start: 2px;
+  --admin-sidebar-route-rail-padding-block-end: 2px;
   --admin-sidebar-rail-hidden-display: inline-flex;
   --admin-sidebar-actions-width: auto;
   --admin-sidebar-actions-direction: row;
@@ -492,11 +495,12 @@ body.admin-page .sidebar-actions details.sidebar-action--rail-only {
 
 body.admin-page .admin-rail-routes {
   display: var(--admin-sidebar-route-rail-display);
-  gap: 5px;
+  gap: var(--admin-sidebar-route-rail-gap);
   justify-items: center;
   width: 100%;
   margin-block-start: var(--admin-sidebar-route-rail-margin-start);
-  padding-block: 2px;
+  padding-block: var(--admin-sidebar-route-rail-padding-block-start)
+    var(--admin-sidebar-route-rail-padding-block-end);
 }
 
 body.admin-page .sidebar-actions .sidebar-action--rail-hidden {

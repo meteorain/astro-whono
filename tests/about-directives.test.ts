@@ -75,6 +75,44 @@ describe('about directives markdown transform', () => {
     expect(html).toBe('<div data-about-contact-links=""></div>');
   });
 
+  it('renders site-info as a semantic card with generated copy text', async () => {
+    const html = await renderAboutMarkdown(
+      [
+        '::site-info{name="Whono" url="https://astro.whono.me/" description="一个极简的双栏 Astro 主题" avatar="author/avatar.webp"}'
+      ].join('\n'),
+      { base: '/blog/' }
+    );
+
+    expect(html).toContain('<div class="about-site-info">');
+    expect(html).not.toContain('aria-label="本站友链信息"');
+    expect(html).not.toContain('about-site-info__avatar');
+    expect(html).not.toContain('about-site-info__eyebrow');
+    expect(html).not.toContain('src="/blog/author/avatar.webp"');
+    expect(html).toContain('<dt class="about-site-info__field-label">名称</dt>');
+    expect(html).toContain('<dd class="about-site-info__field-value">Whono</dd>');
+    expect(html).toContain('href="https://astro.whono.me/"');
+    expect(html).toContain('data-about-site-info-copy');
+    expect(html).toContain('name: Whono');
+    expect(html).toContain('description: 一个极简的双栏 Astro 主题');
+    expect(html).toContain('avatar: author/avatar.webp');
+  });
+
+  it('supports site-info leaf directive inside FAQ', async () => {
+    const html = await renderAboutMarkdown(
+      [
+        ':::faq{question="如何交换友链？"}',
+        '请附上站点名称、链接、简介和头像。',
+        '',
+        '::site-info{name="Whono" url="https://astro.whono.me/" description="一个极简的双栏 Astro 主题" avatar="https://astro.whono.me/author/avatar.webp"}',
+        ':::'
+      ].join('\n')
+    );
+
+    expect(html).toContain('<div class="qa-list" aria-label="常见问题">');
+    expect(html).toContain('class="about-site-info"');
+    expect(html).not.toContain('<p>:::</p>');
+  });
+
   it('does not transform directives outside the about source file', async () => {
     const html = await renderAboutMarkdown(
       [

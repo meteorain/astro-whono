@@ -150,27 +150,30 @@
 
 .admin-images-browser__code-wrapper {
   position: relative;
+  display: grid;
+  align-items: center;
+  min-height: var(--admin-control-height);
   overflow: hidden;
   border: 0;
   border-radius: var(--admin-control-radius);
-  background: color-mix(in srgb, var(--code-content-bg) 90%, var(--border) 10%);
+  background: color-mix(in srgb, var(--code-content-bg) 74%, var(--panel) 26%);
   transition: background-color 180ms ease;
 }
 
 .admin-images-browser__code-wrapper:hover {
-  background: color-mix(in srgb, var(--code-content-bg) 78%, var(--border) 22%);
+  background: color-mix(in srgb, var(--code-content-bg) 88%, var(--panel) 12%);
 }
 
 .admin-images-browser__code-wrapper--disabled,
 .admin-images-browser__code-wrapper--disabled:hover {
-  background: color-mix(in srgb, var(--code-content-bg) 92%, var(--panel) 8%);
+  background: color-mix(in srgb, var(--code-content-bg) 68%, var(--panel) 32%);
 }
 
 .admin-images-browser__detail-code {
   display: block;
   margin: 0;
   padding: 6px 36px 6px 10px;
-  color: var(--text);
+  color: color-mix(in srgb, var(--text) 82%, var(--muted) 18%);
   font-family: var(--admin-font-mono);
   font-size: 0.85rem;
   line-height: 1.35;
@@ -180,11 +183,12 @@
 
 .admin-images-copy-btn {
   position: absolute;
-  top: 4px;
+  top: calc(var(--admin-control-height) / 2);
   right: 4px;
   z-index: 1;
   display: grid;
   place-items: center;
+  transform: translateY(-50%);
 }
 
 .admin-images-copy-btn::after {

@@ -7,14 +7,15 @@ import {
   type ViewUpdate
 } from '@codemirror/view';
 
-type AboutDirectiveName = 'friend' | 'faq';
+type AboutDirectiveName = 'friend' | 'faq' | 'site-info';
 
-const directiveLineRe = /^\s*:{3,}(friend|faq)\b/;
+const directiveLineRe = /^\s*(?::{3,}(friend|faq)|:{2,}(site-info))\b/;
 const attributeRe = /([A-Za-z][\w:-]*)\s*=\s*("(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|[^\s"'}]+)/g;
 const urlValueRe = /^https?:\/\//i;
 const localAvatarPathValueRe = /^(?:\.\/)?[\w.-]+(?:\/[\w.-]+)+\.(?:avif|gif|jpe?g|png|svg|webp)$/i;
 const friendAttributeNames = new Set(['name', 'url', 'avatar']);
 const faqAttributeNames = new Set(['question']);
+const siteInfoAttributeNames = new Set(['name', 'url', 'description', 'avatar']);
 
 const directiveStringValueDecoration = Decoration.mark({
   class: 'cm-admin-about-directive-input cm-admin-about-directive-input--text'
@@ -35,7 +36,9 @@ const shouldHighlightAttribute = (
 ): boolean =>
   directiveName === 'friend'
     ? friendAttributeNames.has(attributeName)
-    : faqAttributeNames.has(attributeName);
+    : directiveName === 'faq'
+      ? faqAttributeNames.has(attributeName)
+      : siteInfoAttributeNames.has(attributeName);
 
 const getValueDecoration = (
   directiveName: AboutDirectiveName,
@@ -45,7 +48,7 @@ const getValueDecoration = (
   if (directiveName === 'faq' && attributeName === 'question') return directiveQuestionValueDecoration;
   if (urlValueRe.test(value)) return directiveUrlValueDecoration;
   if (
-    directiveName === 'friend'
+    (directiveName === 'friend' || directiveName === 'site-info')
     && attributeName === 'avatar'
     && localAvatarPathValueRe.test(value)
   ) {
@@ -78,8 +81,8 @@ const addAboutDirectiveLineDecorations = (
   const directiveMatch = directiveLineRe.exec(lineText);
   if (!directiveMatch) return;
 
-  const directiveName = directiveMatch[1];
-  if (directiveName !== 'friend' && directiveName !== 'faq') return;
+  const directiveName = directiveMatch[1] ?? directiveMatch[2];
+  if (directiveName !== 'friend' && directiveName !== 'faq' && directiveName !== 'site-info') return;
 
   const openBraceIndex = lineText.indexOf('{', directiveMatch[0].length);
   if (openBraceIndex < 0) return;

@@ -106,6 +106,10 @@ export const sanitizeSchema = {
       'title',
       'ariaLabel',
       'aria-label',
+      'dataAboutCopyText',
+      'dataAboutSiteInfoCopy',
+      'data-about-copy-text',
+      'data-about-site-info-copy',
       'dataState',
       'data-state'
     ]),

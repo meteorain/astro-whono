@@ -1,5 +1,5 @@
 /* about.css
-   承载 about 页面私有规则，并复用代码块组件样式以覆盖 FAQ 中的可复制信息块。
+   承载 about 页面私有规则，并保留普通 Markdown 代码块能力。
 */
 @import "./components/code-block.css";
 
@@ -51,7 +51,7 @@
 
 .about-body h2,
 .about-body h3 {
-  margin: 30px 0 10px;
+  margin: 38px 0 10px;
   font-family: "Noto Serif SC", ui-serif, Georgia, "Times New Roman", "Songti SC", serif;
 }
 
@@ -147,6 +147,124 @@
   font-size: 14px;
   line-height: 1.6;
   font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
+}
+
+.about-site-info {
+  position: relative;
+  margin: 16px 0;
+  padding: 12px 44px 12px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--code-content-bg);
+}
+
+.about-site-info__copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.about-site-info__copy-icon {
+  width: 15px;
+  height: 15px;
+}
+
+.about-site-info__check-icon {
+  width: 15px;
+  height: 15px;
+  display: none;
+}
+
+.about-site-info__copy:disabled {
+  cursor: default;
+  opacity: 0.62;
+}
+
+.about-site-info__copy:hover:not(:disabled) {
+  border-color: #dfdcd8;
+  background: #f7f7f5;
+  color: var(--text);
+}
+
+.about-site-info__copy:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.about-site-info__copy[data-state="copied"] {
+  border-color: #dfdcd8;
+  background: #f7f7f5;
+  color: var(--text);
+}
+
+.about-site-info__copy[data-state="copied"] .about-site-info__copy-icon {
+  display: none;
+}
+
+.about-site-info__copy[data-state="copied"] .about-site-info__check-icon {
+  display: block;
+}
+
+:root[data-theme="dark"] .about-site-info__copy:hover:not(:disabled) {
+  border-color: #3d3d3d;
+  background: #252525;
+}
+
+:root[data-theme="dark"] .about-site-info__copy[data-state="copied"] {
+  border-color: #3d3d3d;
+  background: #252525;
+}
+
+.about-site-info__fields {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.about-site-info__field {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+  align-items: start;
+}
+
+.about-site-info__field-label,
+.about-site-info__field-value {
+  margin: 0;
+}
+
+.about-site-info__field-label {
+  color: var(--faint);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.about-site-info__field-value {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+  font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
+  overflow-wrap: anywhere;
+}
+
+.about-site-info__field-value a {
+  color: var(--text);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
 }
 
 .qa-list {

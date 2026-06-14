@@ -88,13 +88,22 @@ export function remarkAboutDirectives(options = {}) {
     if (!shouldTransformAboutDirectives(file, options)) return;
 
     visit(tree, 'leafDirective', (node) => {
-      if (node.name !== 'contact-links') return;
+      if (node.name !== 'contact-links' && node.name !== 'site-info') return;
 
+      const attributes = node.attributes || {};
       if (!node.data) node.data = {};
       node.data.hName = 'div';
-      node.data.hProperties = {
-        'data-about-contact-links': ''
-      };
+      node.data.hProperties = node.name === 'contact-links'
+        ? {
+            'data-about-contact-links': ''
+          }
+        : {
+            [ABOUT_DIRECTIVE_ATTR]: node.name,
+            'data-about-name': toOptionalString(attributes.name),
+            'data-about-url': toOptionalString(attributes.url),
+            'data-about-description': toOptionalString(attributes.description),
+            'data-about-avatar': toOptionalString(attributes.avatar)
+          };
     });
 
     visit(tree, 'containerDirective', (node) => {
@@ -186,11 +195,109 @@ const createFaqNode = (node) => {
   ]);
 };
 
+const createSiteInfoCopyText = ({ name, url, description, avatar }) =>
+  [
+    ['name', name],
+    ['url', url],
+    ['description', description],
+    ['avatar', avatar]
+  ]
+    .filter(([, value]) => value)
+    .map(([key, value]) => `${key}: ${value}`)
+    .join('\n');
+
+const createSiteInfoField = (label, value, valueNode) => {
+  if (!value) return null;
+
+  return createElement('div', { className: ['about-site-info__field'] }, [
+    createElement('dt', { className: ['about-site-info__field-label'] }, [createText(label)]),
+    createElement('dd', { className: ['about-site-info__field-value'] }, [
+      valueNode ?? createText(value)
+    ])
+  ]);
+};
+
+const createCopyIconNode = () =>
+  createElement('svg', {
+    className: ['about-site-info__copy-icon'],
+    viewBox: '0 0 24 24',
+    width: 16,
+    height: 16,
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': 'true'
+  }, [
+    createElement('rect', { width: 14, height: 14, x: 8, y: 8, rx: 2, ry: 2 }),
+    createElement('path', { d: 'M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2' })
+  ]);
+
+const createCheckIconNode = () =>
+  createElement('svg', {
+    className: ['about-site-info__check-icon'],
+    viewBox: '0 0 24 24',
+    width: 16,
+    height: 16,
+    fill: 'none',
+    stroke: 'currentColor',
+    strokeWidth: 2,
+    strokeLinecap: 'round',
+    strokeLinejoin: 'round',
+    'aria-hidden': 'true'
+  }, [
+    createElement('path', { d: 'M20 6 9 17l-5-5' })
+  ]);
+
+const createSiteInfoNode = (node) => {
+  const properties = node.properties || {};
+  const name = toPropertyString(properties, 'data-about-name').trim();
+  const url = toPropertyString(properties, 'data-about-url').trim();
+  const description = toPropertyString(properties, 'data-about-description').trim();
+  const avatar = toPropertyString(properties, 'data-about-avatar').trim();
+  if (!name && !url && !description && !avatar) return null;
+
+  const safeUrl = normalizeAboutDirectiveFriendUrl(url);
+  const fieldChildren = [
+    createSiteInfoField('名称', name),
+    createSiteInfoField('链接', url, safeUrl
+      ? createElement('a', { href: safeUrl }, [createText(url)])
+      : null),
+    createSiteInfoField('简介', description),
+    createSiteInfoField('头像', avatar)
+  ].filter(Boolean);
+
+  const copyText = createSiteInfoCopyText({ name, url, description, avatar });
+  const headerActions = copyText
+    ? [
+        createElement('button', {
+          type: 'button',
+          className: ['about-site-info__copy'],
+          disabled: true,
+          'data-about-site-info-copy': '',
+          'data-about-copy-text': copyText,
+          'data-state': 'idle',
+          'aria-label': '复制友链信息',
+          title: '复制友链信息'
+        }, [createCopyIconNode(), createCheckIconNode()])
+      ]
+    : [];
+
+  return createElement('div', { className: ['about-site-info'] }, [
+    ...headerActions,
+    ...(fieldChildren.length
+      ? [createElement('dl', { className: ['about-site-info__fields'] }, fieldChildren)]
+      : [])
+  ]);
+};
+
 const transformDirectiveNode = (node, base) => {
   if (node.type !== 'element') return node;
   const directive = toPropertyString(node.properties || {}, ABOUT_DIRECTIVE_ATTR);
   if (directive === 'friend') return createFriendNode(node, base);
   if (directive === 'faq') return createFaqNode(node);
+  if (directive === 'site-info') return createSiteInfoNode(node);
   return node;
 };
 

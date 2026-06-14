@@ -28,9 +28,9 @@ export type MarkdownMoreSeparatorInsertTool = {
 
 export type MarkdownAboutDirectiveInsertTool = {
   type: 'aboutDirective';
-  id: 'friend' | 'faq' | 'contactLinks';
+  id: 'friend' | 'faq' | 'siteInfo' | 'contactLinks';
   label: string;
-  icon: 'square-user-round' | 'badge-question-mark' | 'link-2';
+  icon: 'square-user-round' | 'badge-question-mark' | 'info' | 'link-2';
   text: string;
   placement: Extract<MarkdownInsertPlacement, 'block'>;
 };
@@ -94,6 +94,14 @@ export const MARKDOWN_ABOUT_DIRECTIVE_INSERT_TOOLS: readonly MarkdownAboutDirect
       '回答内容',
       ':::'
     ].join('\n'),
+    placement: 'block'
+  },
+  {
+    type: 'aboutDirective',
+    id: 'siteInfo',
+    label: '插入本站资料',
+    icon: 'info',
+    text: '::site-info{name="站点名称" url="https://example.com" description="一句介绍" avatar="https://example.com/avatar.png"}',
     placement: 'block'
   },
   {
