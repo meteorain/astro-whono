@@ -3,97 +3,64 @@ import { glob } from 'astro/loaders';
 import { z } from 'astro/zod';
 import { ESSAY_PUBLIC_SLUG_RE } from './utils/slug-rules';
 import { normalizeBitsAvatarPath } from './utils/format';
-import { parseEssayDateInput, parseEssayPublishedAtInput } from './utils/date-only';
+import { parseEssayDateInput } from './utils/date-only';
 import { normalizeBitsImageSource } from './lib/bits-image-source';
 
 const slugRule = z
   .string()
   .regex(ESSAY_PUBLIC_SLUG_RE, 'slug must be lowercase kebab-case');
 
-const essayBaseFields = {
-  title: z.string(),
-  description: z.string().optional(),
-  date: z.unknown(),
-  tags: z.array(z.string()).default([]),
-  draft: z.boolean().default(false),
-  archive: z.boolean().default(true),
-  publishedAt: z.unknown().optional(),
-  updatedAt: z.unknown().optional(),
-  // Optional custom permalink. If present, it overrides the default public slug
-  // derived from the entry id / path.
-  slug: slugRule.optional()
-};
+// essay：内容来自 meteorain/content 的 posts 目录（WordPress 重导出，318 篇）。
+// 转换器把 content 的 frontmatter（pubDatetime / modDatetime / categories / tags）
+// 映射成 astro-whono essay 所需字段（date / updatedAt / tags），复用主题的日期解析逻辑。
+const essay = defineCollection({
+  loader: glob({ pattern: '**/*.md', base: './src/content/posts' }),
+  schema: z
+    .object({
+      title: z.string(),
+      description: z.string().optional(),
+      // content（重导出）原始字段
+      pubDatetime: z.unknown(),
+      modDatetime: z.unknown().optional().nullable(),
+      categories: z.array(z.string()).default([]),
+      tags: z.array(z.string()).default([]),
+      draft: z.boolean().default(false)
+    })
+    .transform((data, ctx) => {
+      const dateResult = parseEssayDateInput(data.pubDatetime);
+      if (!dateResult) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['pubDatetime'],
+          message: 'pubDatetime must be a valid date/datetime'
+        });
+        return z.NEVER;
+      }
 
-const essayShape = {
-  ...essayBaseFields,
-  cover: z.string().optional(),
-  badge: z.string().optional()
-};
+      let updatedAt: Date | undefined;
+      const mod = data.modDatetime;
+      if (mod != null && !(typeof mod === 'string' && mod.trim() === '')) {
+        const u = parseEssayDateInput(mod);
+        if (u && u.date.valueOf() >= dateResult.date.valueOf()) updatedAt = u.date;
+      }
 
-const essaySchema = z.object(essayShape).transform((data, ctx) => {
-  const dateResult = parseEssayDateInput(data.date);
-  if (!dateResult) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['date'],
-      message: 'date must be a valid YYYY-MM-DD date or ISO 8601 datetime with timezone'
-    });
-    return z.NEVER;
-  }
+      const tags = [
+        ...new Set(
+          [...(data.categories ?? []), ...(data.tags ?? [])].map((t) => t.toLowerCase())
+        )
+      ];
 
-  const publishedAtInput = data.publishedAt;
-  const hasExplicitPublishedAt =
-    publishedAtInput != null &&
-    !(typeof publishedAtInput === 'string' && publishedAtInput.trim() === '');
-  const publishedAt = hasExplicitPublishedAt
-    ? parseEssayPublishedAtInput(publishedAtInput)
-    : dateResult.publishedAt;
-
-  if (hasExplicitPublishedAt && !publishedAt) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['publishedAt'],
-      message: 'publishedAt must be a valid ISO 8601 datetime with timezone'
-    });
-    return z.NEVER;
-  }
-
-  const hasExplicitUpdatedAt =
-    data.updatedAt != null &&
-    !(typeof data.updatedAt === 'string' && data.updatedAt.trim() === '');
-  const updatedAtInput = data.updatedAt;
-  const updatedAtResult = hasExplicitUpdatedAt ? parseEssayDateInput(updatedAtInput) : null;
-
-  if (hasExplicitUpdatedAt && !updatedAtResult) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['updatedAt'],
-      message: 'updatedAt must be a valid YYYY-MM-DD date or ISO 8601 datetime with timezone'
-    });
-    return z.NEVER;
-  }
-
-  if (updatedAtResult && updatedAtResult.date.valueOf() < dateResult.date.valueOf()) {
-    ctx.addIssue({
-      code: 'custom',
-      path: ['updatedAt'],
-      message: 'updatedAt must not be earlier than date'
-    });
-    return z.NEVER;
-  }
-
-  const {
-    publishedAt: _publishedAt,
-    updatedAt: _updatedAt,
-    ...normalizedData
-  } = data;
-
-  return {
-    ...normalizedData,
-    date: dateResult.date,
-    ...(publishedAt ? { publishedAt } : {}),
-    ...(updatedAtResult ? { updatedAt: updatedAtResult.date } : {})
-  };
+      return {
+        title: data.title,
+        description: data.description,
+        date: dateResult.date,
+        tags,
+        draft: data.draft,
+        archive: true,
+        ...(dateResult.publishedAt ? { publishedAt: dateResult.publishedAt } : {}),
+        ...(updatedAt ? { updatedAt } : {})
+      };
+    })
 });
 
 const bitsImage = z.object({
@@ -132,11 +99,6 @@ const bitsAuthor = z.object({
   avatar: bitsAuthorAvatar.optional()
 });
 
-const essay = defineCollection({
-  loader: glob({ pattern: '**/*.md', base: './src/content/essay' }),
-  schema: essaySchema
-});
-
 const bits = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/bits' }),
   schema: z.object({
@@ -155,7 +117,8 @@ const bits = defineCollection({
 });
 
 const memo = defineCollection({
-  loader: glob({ pattern: '**/*.md', base: './src/content/memo' }),
+  // memo/about 改读 astro-whono 本地目录（不放进共享 content 仓库），仅作占位让 build 通过。
+  loader: glob({ pattern: '**/*.md', base: './src/site-pages/memo' }),
   schema: z.object({
     title: z.string().optional(),
     subtitle: z.string().optional(),
@@ -166,7 +129,7 @@ const memo = defineCollection({
 });
 
 const about = defineCollection({
-  loader: glob({ pattern: 'index.md', base: './src/content/about' }),
+  loader: glob({ pattern: 'index.md', base: './src/site-pages/about' }),
   schema: z.looseObject({})
 });
 

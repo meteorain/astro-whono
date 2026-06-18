@@ -27,7 +27,10 @@ export const RESERVED_ESSAY_SLUGS: ReadonlySet<string> = new Set([
  * single-segment slug suitable for the `[slug]` route.
  */
 export const flattenEntryIdToSlug = (entryId: string): string =>
-  entryId.replaceAll('/', '-');
+  entryId
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'untitled';
 
 /**
  * Astro glob loader 会按路径段做 GitHub-style slug 化得到默认公开 entry id。
