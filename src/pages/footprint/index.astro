@@ -1,0 +1,14 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FootprintGlobe from '../../components/FootprintGlobe.astro';
+
+export const prerender = true;
+---
+
+<BaseLayout title="足迹" bodyClass="footprint-page" activeNavId="footprint" allowReadingMode={false}>
+  <div class="page-header">
+    <h1 class="page-title">足迹</h1>
+    <span class="page-subtitle">沿着此线前行，但见大江大川。</span>
+  </div>
+  <FootprintGlobe />
+</BaseLayout>

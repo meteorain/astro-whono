@@ -41,7 +41,7 @@ const { Content } = await render(entryWithContactLinks);
       resolvedSocialItems.length ? (
         <div class="page-actions">
           {resolvedSocialItems.map((item) => (
-            <a class="icon-link" href={item.href} aria-label={item.label} title={item.label}>
+            <a class="icon-link" href={item.href} target="_blank" rel="noopener noreferrer" aria-label={item.label} title={item.label}>
               <BrandIcon name={item.iconKey} class="icon" />
             </a>
           ))}

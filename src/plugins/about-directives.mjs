@@ -173,7 +173,7 @@ const createFriendNode = (node, base) => {
   }
 
   return createElement('li', { [FRIEND_MARKER]: true }, [
-    createElement('a', { className: ['friend-card'], href: url }, [
+    createElement('a', { className: ['friend-card'], href: url, target: '_blank', rel: 'noopener noreferrer' }, [
       createElement('span', {
         className: avatarClassName,
         'aria-hidden': 'true'

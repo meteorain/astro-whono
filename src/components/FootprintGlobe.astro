@@ -1,0 +1,132 @@
+---
+// 足迹地球（globe.gl）。从主站 liuweinan.com 移植：数据来自 src/data/places.ts，
+// 沉浸式满屏地球当背景；适配 whono 的暗色机制（<html data-theme="dark">）与侧栏布局。
+import { places } from '../data/places';
+
+const points = places;
+// 旅行路线：按数组顺序把相邻点连成弧线（跳过重合点）
+const arcs: { startLat: number; startLng: number; endLat: number; endLng: number }[] = [];
+for (let i = 0; i < points.length - 1; i++) {
+  const a = points[i], b = points[i + 1];
+  if (!a || !b) continue;
+  if (a.lat === b.lat && a.lng === b.lng) continue;
+  arcs.push({ startLat: a.lat, startLng: a.lng, endLat: b.lat, endLng: b.lng });
+}
+---
+
+<div id="footprint-globe" data-points={JSON.stringify(points)} data-arcs={JSON.stringify(arcs)}></div>
+
+<style is:global>
+  /* —— 沉浸式：地球铺满整页当背景，whono 侧栏/内容浮在其上（仅 .footprint-page 生效）—— */
+  body.footprint-page,
+  body.footprint-page .shell,
+  body.footprint-page .content,
+  body.footprint-page .content__inner,
+  body.footprint-page .site-footer { background: transparent; }
+
+  /* 地球：固定满屏，置于内容之下 */
+  body.footprint-page #footprint-globe { position: fixed; inset: 0; z-index: -1; }
+  :root[data-theme="dark"] body.footprint-page #footprint-globe { background: #1c1917; }
+  :root:not([data-theme="dark"]) body.footprint-page #footprint-globe { background: #fbfbfb; }
+
+  /* 点击穿透：空白处可拖动地球；侧栏 / 正文 / 页脚 / 地球仍可交互 */
+  body.footprint-page { pointer-events: none; }
+  body.footprint-page #site-sidebar,
+  body.footprint-page .content__inner > *,
+  body.footprint-page #footprint-globe { pointer-events: auto; }
+
+  /* HTML 城市标签（系统字体 → 中文正常）；颜色随主题切换 */
+  .globe-label {
+    position: absolute; left: 7px; top: -8px; white-space: nowrap;
+    font: 600 12px system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  :root[data-theme="dark"] .globe-label { color: rgba(255, 200, 120, .96); text-shadow: 0 1px 4px #000, 0 0 2px #000; }
+  :root:not([data-theme="dark"]) .globe-label { color: #7a1f12; text-shadow: 0 1px 3px #fff, 0 0 4px #fff, 0 0 2px #fff; }
+</style>
+
+<script>
+  import Globe from 'globe.gl';
+
+  const el = document.getElementById('footprint-globe');
+  if (el) {
+    const points = JSON.parse(el.dataset.points || '[]');
+    const arcs = JSON.parse(el.dataset.arcs || '[]');
+
+    const world = (Globe as any)()(el)
+      .width(window.innerWidth)
+      .height(window.innerHeight)
+      .pointsData(points)
+      .pointLat('lat').pointLng('lng')
+      .pointAltitude(0.012)
+      .pointRadius(0.5)
+      .pointLabel((d: any) => d.location || d.name)
+      .htmlElementsData(points)
+      .htmlLat('lat').htmlLng('lng')
+      .htmlAltitude(0.012)
+      .htmlElement((d: any) => {
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:relative;pointer-events:none;transition:opacity .25s;';
+        const label = document.createElement('span');
+        label.className = 'globe-label';
+        label.textContent = d.name;
+        wrap.appendChild(label);
+        return wrap;
+      })
+      .htmlElementVisibilityModifier((elem: HTMLElement, isVisible: boolean) => {
+        elem.style.opacity = isVisible ? '1' : '0';
+      })
+      // 扁平国家色块（仅浅色模式显示）
+      .polygonCapColor(() => '#f4f1ea')
+      .polygonSideColor(() => 'rgba(120,140,150,0.12)')
+      .polygonStrokeColor(() => '#c7d6df')
+      .polygonAltitude(0.008)
+      // 旅行路线弧线（流动虚线动画）
+      .arcsData(arcs)
+      .arcStartLat('startLat').arcStartLng('startLng')
+      .arcEndLat('endLat').arcEndLng('endLng')
+      .arcStroke(0.4)
+      .arcDashLength(0.4).arcDashGap(0.18).arcDashAnimateTime(2200);
+
+    world.pointOfView({ lat: 28, lng: 105, altitude: 2.2 }, 0);
+    const controls = world.controls();
+    controls.autoRotate = true;
+    controls.autoRotateSpeed = 0.5;
+
+    // 国家边界（仅浅色模式用），异步加载后重新应用主题
+    let countries: any[] = [];
+    fetch('/data/world-countries-110m.geojson')
+      .then((r) => r.json())
+      .then((geo) => { countries = (geo.features || []).filter((f: any) => f.properties?.ISO_A2 !== 'AQ'); applyTheme(); })
+      .catch(() => {});
+
+    // —— 主题联动：whono 用 <html data-theme="dark"> ——
+    function applyTheme() {
+      const dark = document.documentElement.dataset.theme === 'dark';
+      if (dark) {
+        world.globeImageUrl('/textures/earth-night.jpg')
+          .backgroundImageUrl('/textures/night-sky.png')
+          .backgroundColor('#1c1917')
+          .polygonsData([])
+          .pointColor(() => 'rgba(255,170,40,0.92)')
+          .arcColor(() => ['rgba(255,170,40,0.15)', 'rgba(255,205,130,0.85)']);
+        world.globeMaterial().color.set('#ffffff');
+      } else {
+        world.globeImageUrl('/textures/globe-light.png')
+          .backgroundImageUrl(null)
+          .backgroundColor('#fbfbfb')
+          .polygonsData(countries)
+          .pointColor(() => 'rgba(200,40,30,0.95)')
+          .arcColor(() => ['rgba(200,40,30,0.2)', 'rgba(140,25,18,0.9)']);
+        world.globeMaterial().color.set('#d9e7f0');
+      }
+    }
+    applyTheme();
+    new MutationObserver(applyTheme).observe(document.documentElement, {
+      attributes: true, attributeFilter: ['data-theme'],
+    });
+
+    window.addEventListener('resize', () => {
+      world.width(window.innerWidth).height(window.innerHeight);
+    });
+  }
+</script>
