@@ -1,7 +1,7 @@
 name: 同步上游 cxro/astro-whono
 
 # 每周把上游 cxro/astro-whono 的代码更新合并过来：
-# - 始终保留你对本 fork 的适配（content 子模块指针、字段转换器、slug 规则、Vercel 配置、占位页）
+# - 始终保留你对本 fork 的适配（content 子模块指针、字段转换器、slug 规则、Vercel 配置、占位页、瘦身版 ci.yml）
 # - 绝不引入上游的 src/content（示例内容）
 # - 有实际代码改动 → 开 PR（你确认后合并）
 # - 出现预期外的冲突 → 开 issue 提醒（可让 Claude 帮忙解决）
@@ -51,7 +51,7 @@ jobs:
           git merge --no-edit upstream/main || true
 
           # 始终保留“我们的”适配文件（绝不要上游的 content，也不要上游对这些文件的改动）
-          OURS="src/content .gitmodules src/content.config.ts src/utils/slug-rules.ts"
+          OURS="src/content .gitmodules src/content.config.ts src/utils/slug-rules.ts .github/workflows/ci.yml"
           ADAPTED_CONFLICT=""
           for p in $OURS; do
             if git ls-files -u -- "$p" | grep -q .; then

@@ -11,8 +11,10 @@ const slugRule = z
   .regex(ESSAY_PUBLIC_SLUG_RE, 'slug must be lowercase kebab-case');
 
 // essay：内容来自 meteorain/content 的 posts 目录（WordPress 重导出，318 篇）。
-// 转换器把 content 的 frontmatter（pubDatetime / modDatetime / categories / tags）
-// 映射成 astro-whono essay 所需字段（date / updatedAt / tags），复用主题的日期解析逻辑。
+// 转换器把 content 的 frontmatter 映射成 astro-whono essay 字段：
+//   pubDatetime→date、modDatetime→updatedAt、tags→tags；
+//   categories 既取第一个当 badge（每篇角标），又并入 tags（可在 /archive/tag/ 按分类浏览）。
+// cover/slug 你的内容没有：声明为可选、恒为空（slug 空 → 公开 URL 走文件路径自动拼）。
 const essay = defineCollection({
   loader: glob({ pattern: '**/*.md', base: './src/content/posts' }),
   schema: z
@@ -24,7 +26,10 @@ const essay = defineCollection({
       modDatetime: z.unknown().optional().nullable(),
       categories: z.array(z.string()).default([]),
       tags: z.array(z.string()).default([]),
-      draft: z.boolean().default(false)
+      draft: z.boolean().default(false),
+      // 你的文章没有封面/自定义 slug：声明为可选只为让类型上存在该属性，运行时恒为 undefined
+      cover: z.string().optional(),
+      slug: z.string().optional()
     })
     .transform((data, ctx) => {
       const dateResult = parseEssayDateInput(data.pubDatetime);
@@ -44,19 +49,24 @@ const essay = defineCollection({
         if (u && u.date.valueOf() >= dateResult.date.valueOf()) updatedAt = u.date;
       }
 
+      // tags：把 categories 也并进来（去重 + 转小写）→ 既能按分类浏览，又配合下方 badge
       const tags = [
-        ...new Set(
-          [...(data.categories ?? []), ...(data.tags ?? [])].map((t) => t.toLowerCase())
-        )
+        ...new Set([...data.categories, ...(data.tags ?? [])].map((t) => t.toLowerCase()))
       ];
 
       return {
         title: data.title,
         description: data.description,
         date: dateResult.date,
+        // tags = categories + tags（可在 /archive/tag/ 按分类浏览）
         tags,
+        // badge 单独取第一个分类，在每篇上当角标显示（mood / live …）
+        badge: data.categories[0],
         draft: data.draft,
         archive: true,
+        // cover/slug 恒空：卡片/详情页自动不显示封面；slug 空 → URL 走文件路径
+        cover: data.cover,
+        slug: data.slug,
         ...(dateResult.publishedAt ? { publishedAt: dateResult.publishedAt } : {}),
         ...(updatedAt ? { updatedAt } : {})
       };
@@ -100,7 +110,8 @@ const bitsAuthor = z.object({
 });
 
 const bits = defineCollection({
-  loader: glob({ pattern: '**/*.md', base: './src/content/bits' }),
+  // bits 改读本地生成目录（由 scripts/sync-bits-from-notion.mjs 从 Notion 同步生成，不放进共享 content 子模块）
+  loader: glob({ pattern: '**/*.md', base: './src/generated-bits' }),
   schema: z.object({
     // Bits can be untitled.
     title: z.string().optional(),

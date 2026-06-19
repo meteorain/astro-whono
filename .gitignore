@@ -30,3 +30,7 @@ Thumbs.db
 
 # Font sources (local only)
 tools/fonts-src/
+
+# Notion 同步生成（构建时再生成）
+src/generated-bits/
+public/notion-bits/

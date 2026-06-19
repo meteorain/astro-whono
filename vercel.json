@@ -2,6 +2,6 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "astro",
   "installCommand": "bash bin/vercel-install.sh",
-  "buildCommand": "NODE_ENV=production npm run build",
+  "buildCommand": "node scripts/sync-bits-from-notion.mjs && NODE_ENV=production npm run build",
   "outputDirectory": "dist"
 }
