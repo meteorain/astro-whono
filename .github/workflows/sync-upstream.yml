@@ -1,0 +1,109 @@
+name: 同步上游 cxro/astro-whono
+
+# 每周把上游 cxro/astro-whono 的代码更新合并过来：
+# - 始终保留你对本 fork 的适配（content 子模块指针、字段转换器、slug 规则、Vercel 配置、占位页）
+# - 绝不引入上游的 src/content（示例内容）
+# - 有实际代码改动 → 开 PR（你确认后合并）
+# - 出现预期外的冲突 → 开 issue 提醒（可让 Claude 帮忙解决）
+# - 仅上游内容变化 → 跳过
+# 也可在 Actions 页面手动点 “Run workflow” 触发。
+
+on:
+  schedule:
+    - cron: '0 18 * * 0'   # 每周日 18:00 UTC（北京时间周一 02:00）
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.CONTENT_DEPLOY_TOKEN }}
+
+      - name: 合并上游并按需开 PR / issue
+        env:
+          GH_TOKEN: ${{ secrets.CONTENT_DEPLOY_TOKEN }}
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git remote add upstream https://github.com/cxro/astro-whono.git 2>/dev/null || true
+          git fetch upstream main
+
+          # 上游没有新提交就退出
+          if git merge-base --is-ancestor upstream/main origin/main; then
+            echo "已是最新，无需同步。"
+            exit 0
+          fi
+
+          git checkout -B sync/upstream origin/main
+
+          # 尝试合并（冲突不让脚本中断）
+          git merge --no-edit upstream/main || true
+
+          # 始终保留“我们的”适配文件（绝不要上游的 content，也不要上游对这些文件的改动）
+          OURS="src/content .gitmodules src/content.config.ts src/utils/slug-rules.ts"
+          ADAPTED_CONFLICT=""
+          for p in $OURS; do
+            if git ls-files -u -- "$p" | grep -q .; then
+              git checkout --ours -- "$p" 2>/dev/null || true
+              git add -- "$p" 2>/dev/null || true
+              case "$p" in
+                src/content|.gitmodules) ;;
+                *) ADAPTED_CONFLICT="$ADAPTED_CONFLICT $p" ;;
+              esac
+            fi
+          done
+
+          # 丢弃任何因上游改动而重新冒出来的 src/content 下的内容文件（我们用子模块，绝不要上游内容）
+          for f in $(git diff --name-only --diff-filter=U -- 'src/content/*' 2>/dev/null); do
+            git rm -rf --ignore-unmatch -- "$f" >/dev/null 2>&1 || true
+          done
+
+          # 还有其它冲突 → 开 issue 求助，终止
+          REMAIN="$(git diff --name-only --diff-filter=U || true)"
+          if [ -n "$REMAIN" ]; then
+            git merge --abort || true
+            LIST="$(echo "$REMAIN" | sed 's/^/- /')"
+            BODY="$(printf '自动同步上游 cxro/astro-whono 时，以下文件有冲突，需要手动合并：\n\n%s\n\n（可以让 Claude 帮你解决这些冲突。）' "$LIST")"
+            OPEN="$(gh issue list --search '上游同步有冲突 in:title state:open' --json number --jq 'length' || echo 0)"
+            if [ "${OPEN:-0}" = "0" ]; then
+              gh issue create --title "⚠️ 上游同步有冲突，需手动处理" --body "$BODY"
+            fi
+            echo "有冲突，已开/已存在 issue。"
+            exit 0
+          fi
+
+          # 完成合并提交（若仍在合并中）
+          if [ -f .git/MERGE_HEAD ]; then
+            git commit --no-edit
+          fi
+
+          # 除内容指针外没有实际改动 → 仅上游内容变化，跳过（不开 PR、不改 main）
+          if git diff --quiet "origin/main..HEAD" -- . ':(exclude)src/content'; then
+            echo "上游仅更新了内容，无代码改动，跳过。"
+            exit 0
+          fi
+
+          # 有实际代码改动 → 推分支、开/更新 PR，交给你验收后合并
+          git push -f origin sync/upstream
+          NOTE=""
+          if [ -n "$ADAPTED_CONFLICT" ]; then
+            NOTE="$(printf '\n\n⚠️ 上游也改动了你的适配文件（已强制保留你的版本，建议手动看一眼是否需要吸收上游改动）：%s' "$ADAPTED_CONFLICT")"
+          fi
+          PR_BODY="$(printf '自动合并上游 cxro/astro-whono 最新代码。已保留你的 content 子模块指针、字段转换器(content.config.ts)、slug 规则(slug-rules.ts)、Vercel 配置与 about/memo 占位页；未引入上游 src/content 示例内容。请查看改动，确认无误后点 Merge。%s' "$NOTE")"
+          if gh pr view sync/upstream >/dev/null 2>&1; then
+            gh pr edit sync/upstream --title "🔄 同步上游 cxro/astro-whono（自动）" --body "$PR_BODY"
+          else
+            gh pr create --base main --head sync/upstream --title "🔄 同步上游 cxro/astro-whono（自动）" --body "$PR_BODY"
+          fi
+          echo "已开/更新 PR，等你验收合并。"
