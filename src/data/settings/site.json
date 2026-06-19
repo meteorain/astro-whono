@@ -1,25 +1,42 @@
 {
-  "title": "Astro Themes by Whono",
-  "description": "一个 Astro 主题的展示站：轻量、可维护、可复用。",
+  "title": "LiuWeinan.Com - Vivian Liu - Meteorain",
+  "description": "Liu Weinan's personal site with blogs, photos, and more.",
   "defaultLocale": "zh-CN",
   "footer": {
-    "startYear": 2025,
+    "startYear": 2006,
     "showCurrentYear": true,
-    "copyright": "Whono · Theme Demo · by cxro"
+    "copyright": "基于 astro, Powered by Vercel."
   },
   "adminOverview": {
     "publicVisible": true,
     "hiddenMessage": "作者暂未公开此页面。"
   },
   "socialLinks": {
-    "github": "https://github.com/cxro/astro-whono",
-    "x": "https://twitter.com/yourname",
-    "email": "Astro@Whono.me",
+    "github": null,
+    "x": null,
+    "email": null,
     "presetOrder": {
-      "github": 1,
-      "x": 2,
-      "email": 3
+      "github": 3,
+      "x": 4,
+      "email": 5
     },
-    "custom": []
+    "custom": [
+      {
+        "id": "instagram",
+        "label": "Instagram",
+        "href": "https://www.instagram.com/liuweinan/",
+        "iconKey": "instagram",
+        "visible": true,
+        "order": 1
+      },
+      {
+        "id": "weibo",
+        "label": "微博",
+        "href": "https://weibo.com/weinanliu",
+        "iconKey": "weibo",
+        "visible": true,
+        "order": 2
+      }
+    ]
   }
 }

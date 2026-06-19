@@ -128,8 +128,7 @@ const bits = defineCollection({
 });
 
 const memo = defineCollection({
-  // memo/about 改读 astro-whono 本地目录（不放进共享 content 仓库），仅作占位让 build 通过。
-  loader: glob({ pattern: '**/*.md', base: './src/site-pages/memo' }),
+  loader: glob({ pattern: '**/*.md', base: './src/content/memo' }),
   schema: z.object({
     title: z.string().optional(),
     subtitle: z.string().optional(),
@@ -140,7 +139,7 @@ const memo = defineCollection({
 });
 
 const about = defineCollection({
-  loader: glob({ pattern: 'index.md', base: './src/site-pages/about' }),
+  loader: glob({ pattern: 'index.md', base: './src/content/about' }),
   schema: z.looseObject({})
 });
 
