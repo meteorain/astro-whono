@@ -186,3 +186,239 @@ body.memo-page[data-reading="immersive"] .prose p {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+
+/* 发布框：完全照搬「絮语」搜索栏样式（input + 按钮一体圆角条）。 */
+.memo-compose {
+  display: flex;
+  align-items: stretch;
+  width: 320px;
+  max-width: 100%;
+  min-height: 36px;
+  margin: 0;
+  flex: 0 0 auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.memo-compose:focus-within {
+  outline: none;
+  border-color: var(--border);
+}
+
+.memo-compose textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 36px;
+  max-height: 124px;
+  padding: 7px 10px;
+  border: 0;
+  background: transparent;
+  font-size: 15px;
+  line-height: 22px;
+  color: var(--text);
+  font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
+  outline: none;
+  resize: none;
+  overflow-y: auto;
+  transition: height 0.12s ease;
+}
+
+.memo-compose textarea::placeholder {
+  font-size: 14px;
+  font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
+  color: var(--muted);
+  opacity: 1;
+}
+
+.memo-compose-btn {
+  flex: 0 0 auto;
+  height: 36px;
+  margin: 0;
+  padding: 0 14px;
+  min-width: 56px;
+  border-radius: 0 6px 6px 0;
+  border: 1px solid #111;
+  background: #111;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:root[data-theme="dark"] .memo-compose-btn {
+  background: var(--panel);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.memo-compose-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 操作区（作者标签 + 发布键）：单行时贴在右侧。 */
+.memo-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: stretch;
+}
+
+/* 多行：整框竖排——正文占满整宽在上，操作区落到底部一行（右对齐、上方分隔线），
+   既不让标签/按钮长高，也不会在右侧空白处围出一个框。 */
+/* 多行：正文整宽往下长、内部无任何分割线；底部留一条尽量薄的边，放右下角两个带框小块，
+   正文整宽、绝不被按钮盖住。 */
+.memo-compose.is-multiline {
+  position: relative;
+}
+
+.memo-compose.is-multiline textarea {
+  padding-bottom: 34px;
+}
+
+.memo-compose.is-multiline .memo-actions {
+  position: absolute;
+  right: 6px;
+  bottom: 4px;
+  height: auto;
+  gap: 6px;
+}
+
+.memo-compose.is-multiline .memo-author {
+  height: 26px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.memo-compose.is-multiline .memo-author-chip {
+  height: 100%;
+  border-left: 0;
+}
+
+.memo-compose.is-multiline .memo-compose-btn {
+  height: 26px;
+  border-radius: 6px;
+}
+
+/* 作者标签（框内、紧挨发布键）+ 改名小气泡：直发用当前昵称，点标签才改。 */
+.memo-author {
+  position: relative;
+  flex: 0 0 auto;
+  height: 36px;
+  display: flex;
+  align-items: stretch;
+}
+
+.memo-author-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0 10px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.memo-author-name {
+  max-width: 84px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memo-author-caret {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+.memo-author-pop {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.memo-author-pop[hidden] {
+  display: none;
+}
+
+.memo-author-input {
+  width: 150px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "LXGW WenKai Lite", "Kaiti SC", "STKaiti", serif;
+  font-size: 13px;
+  outline: none;
+}
+
+.memo-author-ok {
+  flex: 0 0 auto;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+:root[data-theme="dark"] .memo-author-pop {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* 与引言并排：发布框放在两行小诗的右侧、垂直居中；窄屏自动换到下一行。 */
+.memo-intro-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px 24px;
+  margin: 28px 0 var(--memo-intro-mb);
+}
+
+/* .intro 自带 margin-top:28px（global.css），在 flex 行里会按外边距盒居中、
+   把框顶高半个边距，对不齐两行文字的中线。故清零 .intro 边距，上间距改由本行承担。 */
+.memo-page .memo-intro-row .intro {
+  margin: 0;
+}
+
+/* 沉浸阅读时隐藏发布框，专注阅读。 */
+body.memo-page[data-reading="immersive"] .memo-compose {
+  display: none;
+}
+
+/* 手机端占满整行宽度（仿「絮语」），输入字号 16px 避免 iOS 聚焦缩放。 */
+@media (max-width: 640px) {
+  .memo-compose {
+    width: 100%;
+  }
+
+  .memo-compose textarea {
+    font-size: 16px;
+  }
+}

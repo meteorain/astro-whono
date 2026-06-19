@@ -95,17 +95,54 @@ const groups = buildMemoTocGroups(headings);
     </button>
   </div>
 
-  <div class="intro prose">
-    {MemoIntroContent ? (
-      <MemoIntroContent />
-    ) : (
-      LEGACY_MEMO_INTRO_LINES.map((line, index) => (
-        <>
-          {index > 0 ? <br /> : null}
-          {line}
-        </>
-      ))
-    )}
+  <div class="memo-intro-row">
+    <div class="intro prose">
+      {MemoIntroContent ? (
+        <MemoIntroContent />
+      ) : (
+        LEGACY_MEMO_INTRO_LINES.map((line, index) => (
+          <>
+            {index > 0 ? <br /> : null}
+            {line}
+          </>
+        ))
+      )}
+    </div>
+
+    <form class="memo-compose" data-memo-compose>
+      <label class="sr-only" for="memo-compose-input">记录此刻</label>
+      <textarea
+        id="memo-compose-input"
+        placeholder="记录此刻…"
+        autocomplete="off"
+        enterkeyhint="send"
+        rows="1"
+      ></textarea>
+      <div class="memo-actions">
+        <div class="memo-author">
+          <button
+            type="button"
+            class="memo-author-chip"
+            aria-label="切换发布昵称"
+            aria-haspopup="true"
+          >
+            <span class="memo-author-name">vivian</span>
+            <span class="memo-author-caret" aria-hidden="true">▾</span>
+          </button>
+          <div class="memo-author-pop" hidden>
+            <input
+              type="text"
+              class="memo-author-input"
+              placeholder="昵称（留空=vivian）"
+              autocomplete="off"
+              maxlength="40"
+            />
+            <button type="button" class="memo-author-ok">确认</button>
+          </div>
+        </div>
+        <button class="memo-compose-btn" type="submit">发布</button>
+      </div>
+    </form>
   </div>
 
   <nav class="memo-toc" aria-label="目录">
@@ -129,6 +166,214 @@ const groups = buildMemoTocGroups(headings);
   <div class="memo-content prose">
     <MemoBodyContent />
   </div>
+
+  <script>
+    import { applyMemoHeadingNumbers } from '../../scripts/memo-heading-numbers';
+
+    // memo 前端动态拉 Isso /latest 渲染：浏览器直连 isso.fly.dev（跨域 CORS 由你在 Isso 端处理）。
+    // 逻辑与构建脚本一致：年份分组、标题取开头词（减号继续、中文！？含进并停）、HTML 实体解码、签名。
+    const ISSO_URL = 'https://isso.fly.dev/latest?limit=1000';
+    const SIG_STYLE = 'text-align:right;color:var(--faint);font-size:.8em;line-height:1.4;margin-top:-8px';
+    const ALLOWED = new Set(['p', 'br', 'a', 'em', 'strong', 'i', 'b', 'span', 'blockquote', 'code']);
+
+    const decode = (s: string) =>
+      String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+    const stripTags = (s: string) => decode(String(s).replace(/<[^>]+>/g, '')).trim();
+    const escapeText = (s: string) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+
+    function titleOf(plain: string) {
+      const m = plain.match(/^[\p{L}\p{N}-]+[！？]?/u) || plain.match(/[\p{L}\p{N}-]+[！？]?/u);
+      let t = (m ? m[0] : plain.slice(0, 12)).trim().replace(/^-+/, '').replace(/-+$/, '');
+      const chars = [...t];
+      if (chars.length > 20) t = chars.slice(0, 20).join('') + '…';
+      return t || '无题';
+    }
+
+    // 轻量净化（Isso 已服务端净化，这里再兜一层）：非白名单标签去壳留内容、去事件属性、去 javascript: 链接
+    function safeHtml(raw: string) {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = decode(raw);
+      tpl.content.querySelectorAll('*').forEach((el) => {
+        const tag = el.tagName.toLowerCase();
+        if (!ALLOWED.has(tag)) { el.replaceWith(...el.childNodes); return; }
+        [...el.attributes].forEach((at) => {
+          if (at.name.toLowerCase().startsWith('on')) el.removeAttribute(at.name);
+        });
+        if (tag === 'a') {
+          if (/^\s*javascript:/i.test(el.getAttribute('href') || '')) el.removeAttribute('href');
+          el.setAttribute('target', '_blank');
+          el.setAttribute('rel', 'noopener noreferrer');
+        }
+      });
+      return tpl.innerHTML;
+    }
+
+    async function renderMemo() {
+      const tocEl = document.querySelector('.memo-toc');
+      const contentEl = document.querySelector('.memo-content');
+      if (!tocEl || !contentEl) return;
+      contentEl.innerHTML = '<p style="color:var(--faint)">加载中…</p>';
+
+      let data;
+      try {
+        const res = await fetch(ISSO_URL, { headers: { Accept: 'application/json' } });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        data = await res.json();
+      } catch (e) {
+        contentEl.innerHTML = '<p style="color:var(--faint)">评论暂时加载不出来。</p>';
+        return;
+      }
+      if (!Array.isArray(data) || !data.length) { contentEl.innerHTML = ''; return; }
+
+      const byYear = new Map<number, Array<{ ts: number; mmdd: string; author: string; title: string; body: string }>>();
+      for (const c of data) {
+        if (!c || !c.created || !c.text) continue;
+        const d = new Date(c.created * 1000);
+        const year = d.getFullYear();
+        const mmdd = String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+        const author = (String(c.author || '匿名').trim() || '匿名').toLowerCase();
+        if (!byYear.has(year)) byYear.set(year, []);
+        byYear.get(year)!.push({ ts: c.created, mmdd, author, title: titleOf(stripTags(c.text)), body: safeHtml(c.text) });
+      }
+
+      let tocHtml = '';
+      let contentHtml = '';
+      for (const y of [...byYear.keys()].sort((a, b) => b - a)) {
+        const items = byYear.get(y)!.sort((a, b) => b.ts - a.ts);
+        let li = '';
+        contentHtml += `<h2>${y}年记</h2>`;
+        items.forEach((it, i) => {
+          const id = `m-${y}-${i + 1}`;
+          li += `<li><a href="#${id}"><span class="toc-num">${i + 1}</span><span>${escapeText(it.title)}</span></a></li>`;
+          contentHtml += `<h3 id="${id}">${escapeText(it.title)}</h3>${it.body}<p style="${SIG_STYLE}">— ${escapeText(it.author)} · ${it.mmdd}</p>`;
+        });
+        tocHtml += `<details open><summary>${y}年记</summary><ul class="toc-items">${li}</ul></details>`;
+      }
+      tocEl.innerHTML = tocHtml;
+      contentEl.innerHTML = contentHtml;
+      // 内容填好后再跑主题自带编号器（与静态渲染同一函数）；之前空圈是因它在评论拉回前就跑过了
+      applyMemoHeadingNumbers(contentEl);
+
+      const mq = window.matchMedia('(max-width: 640px)');
+      const sync = () => tocEl.querySelectorAll('details').forEach((el) => {
+        if (mq.matches) el.removeAttribute('open'); else el.setAttribute('open', '');
+      });
+      sync();
+      mq.addEventListener('change', sync);
+    }
+
+    renderMemo();
+
+    // 发布框：提交 → POST 到 Isso /new?uri=/moments 创建新评论；成功后重新渲染让它立刻出现。
+    // 作者默认 vivian、记住上次（localStorage）；点框内作者标签弹小气泡改昵称。跨域 CORS 由你在 Isso 端放行。
+    const composeForm = document.querySelector<HTMLFormElement>('.memo-compose');
+    const composeInput = composeForm?.querySelector<HTMLTextAreaElement>('#memo-compose-input');
+    const composeBtn = composeForm?.querySelector<HTMLButtonElement>('.memo-compose-btn');
+    if (composeForm && composeInput && composeBtn) {
+      const ISSO_NEW = 'https://isso.fly.dev/new?uri=' + encodeURIComponent('/moments');
+      const defaultLabel = composeBtn.textContent;
+
+      // 作者：默认 vivian，记住上次。点标签弹小气泡改名（Enter 确认 / Esc / 点外部关闭）。
+      const AUTHOR_KEY = 'memo-author';
+      const readAuthor = () => {
+        try { return (localStorage.getItem(AUTHOR_KEY) || '').trim() || 'vivian'; } catch { return 'vivian'; }
+      };
+      let author = readAuthor();
+      const authorChip = composeForm.querySelector<HTMLButtonElement>('.memo-author-chip');
+      const authorName = composeForm.querySelector<HTMLElement>('.memo-author-name');
+      const authorPop = composeForm.querySelector<HTMLElement>('.memo-author-pop');
+      const authorInput = composeForm.querySelector<HTMLInputElement>('.memo-author-input');
+      const authorOk = composeForm.querySelector<HTMLButtonElement>('.memo-author-ok');
+      if (authorName) authorName.textContent = author;
+
+      const setAuthor = (name: string) => {
+        author = (name || '').trim() || 'vivian';
+        if (authorName) authorName.textContent = author;
+        try { localStorage.setItem(AUTHOR_KEY, author); } catch {}
+      };
+      const closePop = () => { if (authorPop) authorPop.hidden = true; };
+      const openPop = () => {
+        if (!authorPop || !authorInput) return;
+        authorInput.value = author;
+        authorPop.hidden = false;
+        authorInput.focus();
+        authorInput.select();
+      };
+      const commitPop = () => { if (authorInput) setAuthor(authorInput.value); closePop(); };
+
+      authorChip?.addEventListener('click', () => {
+        if (authorPop?.hidden) openPop(); else closePop();
+      });
+      authorOk?.addEventListener('click', commitPop);
+      authorInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commitPop(); }
+        else if (e.key === 'Escape') { e.preventDefault(); closePop(); }
+      });
+      document.addEventListener('click', (e) => {
+        if (!authorPop || authorPop.hidden) return;
+        const t = e.target as Node | null;
+        if (!t || authorChip?.contains(t) || authorPop.contains(t)) return;
+        closePop();
+      });
+
+      // 自动长高：内容超出一行就向下长，约 5 行后内部滚动（CSS max-height 兜底）。
+      const measureHeight = () => {
+        composeInput.style.height = 'auto';
+        composeInput.style.height = composeInput.scrollHeight + 'px';
+      };
+      const autoGrow = () => {
+        measureHeight();
+        // 多行 → 竖排（正文整宽 + 底部操作行）；清空才切回单行，避免布局来回抖。
+        if (!composeForm.classList.contains('is-multiline')) {
+          if (composeInput.value.includes('\n') || composeInput.scrollHeight > 40) {
+            composeForm.classList.add('is-multiline');
+            measureHeight();
+          }
+        } else if (composeInput.value === '') {
+          composeForm.classList.remove('is-multiline');
+          measureHeight();
+        }
+      };
+      composeInput.addEventListener('input', autoGrow);
+      // 回车 = 发布，Shift+Enter = 换行。
+      composeInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          composeForm.requestSubmit();
+        }
+      });
+      autoGrow();
+
+      composeForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const text = composeInput.value.trim();
+        if (!text) { composeInput.focus(); return; }
+        composeBtn.disabled = true;
+        composeBtn.textContent = '发布中…';
+        try {
+          const res = await fetch(ISSO_NEW, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text, author })
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          composeInput.value = '';
+          autoGrow();
+          composeBtn.textContent = '已发布';
+          await renderMemo();
+        } catch (err) {
+          composeBtn.textContent = '失败';
+          console.error('[memo] 发布失败', err);
+        } finally {
+          window.setTimeout(() => {
+            composeBtn.textContent = defaultLabel;
+            composeBtn.disabled = false;
+          }, 1400);
+        }
+      });
+    }
+  </script>
 
   <script is:inline>
     (() => {

@@ -18,7 +18,7 @@
     },
     {
       "id": "memo",
-      "label": "小记",
+      "label": "闲话",
       "ornament": "·",
       "order": 3,
       "visible": true
