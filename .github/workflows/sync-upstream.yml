@@ -32,6 +32,9 @@ jobs:
       - name: 合并上游并按需开 PR / issue
         env:
           GH_TOKEN: ${{ secrets.CONTENT_DEPLOY_TOKEN }}
+          # 强制所有 gh 命令打到本 fork：脚本加了名为 upstream 的 remote，
+          # gh 会把它当 PR 目标仓库（fork 特殊处理），导致 PR/issue 建到上游 cxro 去而失败。
+          GH_REPO: ${{ github.repository }}
         run: |
           set -e
           git config user.name "github-actions[bot]"
