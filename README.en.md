@@ -114,11 +114,9 @@ npm run audit:prod
 - This project includes `.nvmrc`, and Cloudflare Pages reads it automatically.
 - If you need to set it manually, add `NODE_VERSION=22.22.0` in environment variables.
 
-**Environment variables (strongly recommended for production)**
+**Environment variables (set for production)**
 - In Pages project -> Settings -> Environment variables, add: `SITE_URL=https://your-domain` (for example `https://astro.whono.me`, without a trailing `/`).
-
-**Why set `SITE_URL`?**
-- Astro uses it to generate canonical, Open Graph `og:url`, RSS links, sitemap, and other fields that require absolute URLs. Without `SITE_URL`, deployment still works, but these links may fall back to relative paths or placeholder domains, which can hurt share previews and search indexing.
+- `SITE_URL` is used to generate absolute links for canonical, Open Graph `og:url`, RSS, and sitemap; without it these links fall back to a placeholder domain, hurting share previews and search indexing.
 
 **About sitemap / robots**
 - `sitemap` is generated only when `SITE_URL` is set, and `/robots.txt` includes a `Sitemap:` line only in that case (to avoid pointing to the wrong domain).
@@ -377,6 +375,16 @@ Source files (not tracked in repository):
 </details>
 
 Font license: SIL Open Font License 1.1 (see `public/fonts/OFL-LXGW-WenKai-Lite.txt` and `public/fonts/OFL-NotoSerifSC.txt`).
+
+### Typography settings
+
+In development, open the Theme Console (`/admin/theme/` → "Typography") to configure the body text, copy, monospace, and brand fonts independently. Changes apply on the next build; the brand font is used for the sidebar site title and quote.
+
+Font cards show previews and source information. Options include system fonts, self-hosted fonts, and online fonts downloaded and self-hosted at build time. Browsers do not contact third-party font services when loading pages. To add a font beyond the built-in options, register it in `src/lib/fonts/registry.ts`.
+
+For source details, size trade-offs, and custom font setup, see the [Theme Console guide → "Typography"](https://astro.whono.me/archive/theme-console-guide/).
+
+Run `npm run check:font-charset` to verify that the charset and font subsets match the site content. If it fails, follow the prompt to run `npm run font:build`.
 
 
 ## RSS
