@@ -54,23 +54,32 @@ jobs:
           # 尝试合并（冲突不让脚本中断）
           git merge --no-edit upstream/main || true
 
-          # 始终保留“我们的”适配文件（绝不要上游的 content，也不要上游对这些文件的改动）
-          OURS="src/content .gitmodules src/content.config.ts src/utils/slug-rules.ts src/data/settings"
+          # src/content 恒为我方子模块：上游把它当普通目录带示例内容，会产生
+          # file/directory 与 modify/delete 冲突（git 会把上游版本挪到 src/content~HEAD）。
+          # 无论如何都把它恢复成我方 gitlink，并清掉上游塞进来的一切内容文件。
+          rm -rf 'src/content~HEAD' 2>/dev/null || true
+          git rm -rf --cached --ignore-unmatch -q -- 'src/content~HEAD' >/dev/null 2>&1 || true
+          if git ls-files -u -- src/content | grep -q .; then
+            git rm -rf --cached --ignore-unmatch -q -- src/content >/dev/null 2>&1 || true
+            git restore --source=HEAD --staged -- src/content 2>/dev/null \
+              || git checkout HEAD -- src/content 2>/dev/null || true
+            git add -- src/content 2>/dev/null || true
+          fi
+          # 清掉工作区里上游写入 src/content 下的普通文件（我方走子模块，绝不要上游内容）
+          git clean -fdq -- src/content >/dev/null 2>&1 || true
+
+          # 始终保留“我们的”适配文件（不要上游对这些文件的改动）
+          OURS=".gitmodules src/content.config.ts src/utils/slug-rules.ts src/data/settings"
           ADAPTED_CONFLICT=""
           for p in $OURS; do
             if git ls-files -u -- "$p" | grep -q .; then
               git checkout --ours -- "$p" 2>/dev/null || true
               git add -- "$p" 2>/dev/null || true
               case "$p" in
-                src/content|.gitmodules) ;;
+                .gitmodules) ;;
                 *) ADAPTED_CONFLICT="$ADAPTED_CONFLICT $p" ;;
               esac
             fi
-          done
-
-          # 丢弃任何因上游改动而重新冒出来的 src/content 下的内容文件（我们用子模块，绝不要上游内容）
-          for f in $(git diff --name-only --diff-filter=U -- 'src/content/*' 2>/dev/null); do
-            git rm -rf --ignore-unmatch -- "$f" >/dev/null 2>&1 || true
           done
 
           # 本 fork 不要上游的 ci.yml（CI 拉不到私有 content 子模块会失败），始终删掉它
@@ -82,11 +91,13 @@ jobs:
             git merge --abort || true
             LIST="$(echo "$REMAIN" | sed 's/^/- /')"
             BODY="$(printf '自动同步上游 cxro/astro-whono 时，以下文件有冲突，需要手动合并：\n\n%s\n\n（可以让 Claude 帮你解决这些冲突。）' "$LIST")"
-            OPEN="$(gh issue list --search '上游同步有冲突 in:title state:open' --json number --jq 'length' || echo 0)"
+            OPEN="$(gh issue list --search '上游同步有冲突 in:title state:open' --json number --jq 'length' 2>/dev/null || echo 0)"
             if [ "${OPEN:-0}" = "0" ]; then
-              gh issue create --title "⚠️ 上游同步有冲突，需手动处理" --body "$BODY"
+              # 仓库可能禁用了 Issues：开失败也不要让整个 job 挂掉，打印冲突清单即可。
+              gh issue create --title "⚠️ 上游同步有冲突，需手动处理" --body "$BODY" \
+                || echo "::warning::无法开 issue（仓库可能禁用了 Issues）。请手动解决以下冲突：$REMAIN"
             fi
-            echo "有冲突，已开/已存在 issue。"
+            echo "有冲突，已提示（issue 或 warning）。"
             exit 0
           fi
 
