@@ -85,19 +85,22 @@ jobs:
           # 本 fork 不要上游的 ci.yml（CI 拉不到私有 content 子模块会失败），始终删掉它
           git rm -f --ignore-unmatch .github/workflows/ci.yml >/dev/null 2>&1 || true
 
-          # 还有其它冲突 → 开 issue 求助，终止
+          # 还有其它冲突 → 不静默跳过、也不依赖 Issues：把带冲突标记的合并提交并推分支、
+          # 开/更新一个"⚠️需手动解决"的 PR，这样你在 PR 列表一定看得到（可让 Claude 拉
+          # sync/upstream 分支解决冲突后再合并）。
           REMAIN="$(git diff --name-only --diff-filter=U || true)"
           if [ -n "$REMAIN" ]; then
-            git merge --abort || true
             LIST="$(echo "$REMAIN" | sed 's/^/- /')"
-            BODY="$(printf '自动同步上游 cxro/astro-whono 时，以下文件有冲突，需要手动合并：\n\n%s\n\n（可以让 Claude 帮你解决这些冲突。）' "$LIST")"
-            OPEN="$(gh issue list --search '上游同步有冲突 in:title state:open' --json number --jq 'length' 2>/dev/null || echo 0)"
-            if [ "${OPEN:-0}" = "0" ]; then
-              # 仓库可能禁用了 Issues：开失败也不要让整个 job 挂掉，打印冲突清单即可。
-              gh issue create --title "⚠️ 上游同步有冲突，需手动处理" --body "$BODY" \
-                || echo "::warning::无法开 issue（仓库可能禁用了 Issues）。请手动解决以下冲突：$REMAIN"
+            git add -A
+            git commit -m "🔄 同步上游 cxro/astro-whono（含未解决冲突，待手动处理）" || true
+            git push -f origin sync/upstream
+            CONFLICT_BODY="$(printf '⚠️ 自动同步上游 cxro/astro-whono 时有冲突。已把【带冲突标记】的合并推到本分支，请手动解决后再合并（可让 Claude 拉 sync/upstream 分支解决）。\n\n冲突文件：\n%s\n\n注意：本分支含 <<<<<<< 冲突标记，未解决前请勿直接 Merge。' "$LIST")"
+            if gh pr view sync/upstream >/dev/null 2>&1; then
+              gh pr edit sync/upstream --title "⚠️ 同步上游 cxro/astro-whono（有冲突，需手动解决）" --body "$CONFLICT_BODY"
+            else
+              gh pr create --base main --head sync/upstream --title "⚠️ 同步上游 cxro/astro-whono（有冲突，需手动解决）" --body "$CONFLICT_BODY"
             fi
-            echo "有冲突，已提示（issue 或 warning）。"
+            echo "有冲突，已推分支并开/更新 PR（待手动解决）。"
             exit 0
           fi
 
