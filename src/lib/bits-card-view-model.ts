@@ -2,7 +2,7 @@ import { createWithBase, formatDateTime } from '../utils/format';
 import { deriveMarkdownText, truncateText } from '../utils/excerpt';
 import { normalizeBitsImageSource } from './bits-image-source';
 
-export const BITS_CARD_FULL_RENDER_LIMIT = 180;
+export const BITS_CARD_FULL_RENDER_LIMIT = 5000;
 
 export type BitsCardImageInput = {
   src?: string | undefined;
