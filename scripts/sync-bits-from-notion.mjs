@@ -1,5 +1,6 @@
 // 从 Notion「每日健康打卡」data source 同步成 astro-whono 的 bits（絮语）MD。
-// 字段：Title(公式) / Date(公式) / Slug(公式) / Status(状态) + 页面图标 emoji。
+// 字段：天气&心情(title, 完整正文) / Date(公式) / Slug(公式) / Status(状态) + 页面图标 emoji。
+//       注意：不要用 Title 公式，它是 substring(0,30)+"……" 的截断预览。
 // 用法：node --env-file=.env scripts/sync-bits-from-notion.mjs [--limit=N]
 import { Client } from '@notionhq/client';
 import { NotionToMarkdown } from 'notion-to-md';
@@ -61,7 +62,9 @@ outer: do {
     total++;
     try {
       const pr = p.properties;
-      const titleText = pr.Title?.formula?.string || '';
+      // 正文取「天气&心情」title 属性(完整文字)；不要用 Title 公式(它 substring(0,30)+"……" 会截断)。
+      const titleText = (pr['天气&心情']?.title || []).map((t) => t.plain_text).join('').trim()
+        || pr.Title?.formula?.string || '';
       const date = pr.Date?.formula?.date?.start;
       let slug = pr.Slug?.formula?.string;
       const status = pr.Status?.status?.name || pr.Status?.select?.name;
