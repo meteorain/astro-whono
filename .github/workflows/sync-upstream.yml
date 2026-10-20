@@ -95,11 +95,12 @@ jobs:
             git commit -m "🔄 同步上游 cxro/astro-whono（含未解决冲突，待手动处理）" || true
             git push -f origin sync/upstream
             CONFLICT_BODY="$(printf '⚠️ 自动同步上游 cxro/astro-whono 时有冲突。已把【带冲突标记】的合并推到本分支，请手动解决后再合并（可让 Claude 拉 sync/upstream 分支解决）。\n\n冲突文件：\n%s\n\n注意：本分支含 <<<<<<< 冲突标记，未解决前请勿直接 Merge。' "$LIST")"
-            if gh pr view sync/upstream >/dev/null 2>&1; then
-              gh pr edit sync/upstream --title "⚠️ 同步上游 cxro/astro-whono（有冲突，需手动解决）" --body "$CONFLICT_BODY"
-            else
-              gh pr create --base main --head sync/upstream --title "⚠️ 同步上游 cxro/astro-whono（有冲突，需手动解决）" --body "$CONFLICT_BODY"
-            fi
+            CT="⚠️ 同步上游 cxro/astro-whono（有冲突，需手动解决）"
+            # 先 edit(PR 已存在时)，失败再 create(不存在时)，再失败只警告——分支已强推、
+            # PR diff 已自动更新，无论如何不让 job 失败。
+            gh pr edit sync/upstream --title "$CT" --body "$CONFLICT_BODY" 2>/dev/null \
+              || gh pr create --base main --head sync/upstream --title "$CT" --body "$CONFLICT_BODY" 2>/dev/null \
+              || echo "::warning::PR 创建/更新失败（分支已推送、PR 列表仍可见）。"
             echo "有冲突，已推分支并开/更新 PR（待手动解决）。"
             exit 0
           fi
@@ -122,9 +123,8 @@ jobs:
             NOTE="$(printf '\n\n⚠️ 上游也改动了你的适配文件（已强制保留你的版本，建议手动看一眼是否需要吸收上游改动）：%s' "$ADAPTED_CONFLICT")"
           fi
           PR_BODY="$(printf '自动合并上游 cxro/astro-whono 最新代码。已保留你的 content 子模块指针、字段转换器(content.config.ts)、slug 规则(slug-rules.ts)、Vercel 配置与站点设置；未引入上游 src/content 示例内容，也已删除上游 ci.yml。请查看改动，确认无误后点 Merge。%s' "$NOTE")"
-          if gh pr view sync/upstream >/dev/null 2>&1; then
-            gh pr edit sync/upstream --title "🔄 同步上游 cxro/astro-whono（自动）" --body "$PR_BODY"
-          else
-            gh pr create --base main --head sync/upstream --title "🔄 同步上游 cxro/astro-whono（自动）" --body "$PR_BODY"
-          fi
+          PT="🔄 同步上游 cxro/astro-whono（自动）"
+          gh pr edit sync/upstream --title "$PT" --body "$PR_BODY" 2>/dev/null \
+            || gh pr create --base main --head sync/upstream --title "$PT" --body "$PR_BODY" 2>/dev/null \
+            || echo "::warning::PR 创建/更新失败（分支已推送、PR 列表仍可见）。"
           echo "已开/更新 PR，等你验收合并。"
