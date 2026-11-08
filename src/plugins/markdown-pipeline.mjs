@@ -11,6 +11,10 @@ import {
 } from './rehype-markdown-math-boundary.mjs';
 import { rehypeAboutDirectives, remarkAboutDirectives } from './about-directives.mjs';
 import remarkCallout from './remark-callout.mjs';
+import remarkContentDirectives from './remark-content-directives.mjs';
+import remarkMark from './remark-mark.mjs';
+import { rehypeBasePath } from './rehype-base-path.mjs';
+import { rehypeRawHtmlLocalImages } from './rehype-raw-html-local-images.mjs';
 import { sanitizeSchema } from './sanitize-schema.mjs';
 import shikiToolbar from './shiki-toolbar.mjs';
 
@@ -83,6 +87,16 @@ export const markdownFeatureContract = Object.freeze([
     }
   },
   {
+    id: 'content-directives',
+    syntax: 'remark-directive',
+    projectPlugins: ['remark-directive', 'remark-content-directives']
+  },
+  {
+    id: 'highlight',
+    syntax: '==text==',
+    projectPlugins: ['remark-mark']
+  },
+  {
     id: 'raw-html-sanitize',
     syntax: 'raw-html',
     sanitizeSource: 'src/plugins/sanitize-schema.mjs',
@@ -99,7 +113,7 @@ export const publicMarkdownRemarkSegments = Object.freeze([
   },
   {
     id: 'project-remark',
-    plugins: ['remark-math', 'remark-directive', 'remark-about-directives', 'remark-callout']
+    plugins: ['remark-math', 'remark-directive', 'remark-about-directives', 'remark-callout', 'remark-content-directives', 'remark-mark']
   }
 ]);
 
@@ -115,7 +129,7 @@ export const previewMarkdownRemarkSegments = Object.freeze([
   },
   {
     id: 'project-remark',
-    plugins: ['remark-math', 'remark-directive', 'remark-about-directives', 'remark-callout']
+    plugins: ['remark-math', 'remark-directive', 'remark-about-directives', 'remark-callout', 'remark-content-directives', 'remark-mark']
   }
 ]);
 
@@ -142,6 +156,20 @@ export const publicMarkdownRehypeSegments = Object.freeze([
       'rehype-sanitize',
       'rehype-katex'
     ]
+  },
+  {
+    id: 'raw-html-local-images',
+    publicOnly: true,
+    plugins: ['rehypeRawHtmlLocalImages'],
+    after: 'project-rehype',
+    before: 'astro-images'
+  },
+  {
+    id: 'body-base-path',
+    publicOnly: true,
+    plugins: ['rehypeBasePath'],
+    after: 'raw-html-local-images',
+    before: 'astro-images'
   },
   {
     id: 'astro-images',
@@ -262,7 +290,9 @@ export const createProjectMarkdownRemarkPlugins = ({ aboutEnabled } = {}) => [
   [remarkMath, markdownMathOptions],
   remarkDirective,
   withOptions(remarkAboutDirectives, aboutEnabled === undefined ? undefined : { enabled: aboutEnabled }),
-  remarkCallout
+  remarkCallout,
+  remarkContentDirectives,
+  remarkMark
 ];
 
 /** @param {ProjectMarkdownRehypeOptions} [options] */
@@ -283,7 +313,11 @@ export const createProjectMarkdownRehypePlugins = ({ aboutBase = '/', aboutEnabl
 export const createPublicMarkdownConfig = ({ base = '/' } = {}) => ({
   processor: unified({
     remarkPlugins: createProjectMarkdownRemarkPlugins(),
-    rehypePlugins: createProjectMarkdownRehypePlugins({ aboutBase: base })
+    rehypePlugins: [
+      ...createProjectMarkdownRehypePlugins({ aboutBase: base }),
+      rehypeRawHtmlLocalImages,
+      [rehypeBasePath, { base }]
+    ]
   }),
   shikiConfig: createMarkdownShikiConfig()
 });

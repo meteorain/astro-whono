@@ -26,6 +26,8 @@ import {
   rehypeProtectMarkdownMath,
   rehypeRestoreMarkdownMathBoundary
 } from '../src/plugins/rehype-markdown-math-boundary.mjs';
+import { rehypeBasePath } from '../src/plugins/rehype-base-path.mjs';
+import { rehypeRawHtmlLocalImages } from '../src/plugins/rehype-raw-html-local-images.mjs';
 import { sanitizeSchema } from '../src/plugins/sanitize-schema.mjs';
 
 const pluginOf = (entry: unknown) => (Array.isArray(entry) ? entry[0] : entry);
@@ -44,6 +46,8 @@ describe('markdown pipeline contract', () => {
       'code-block',
       'gfm',
       'smartypants',
+      'content-directives',
+      'highlight',
       'raw-html-sanitize'
     ]);
 
@@ -74,7 +78,7 @@ describe('markdown pipeline contract', () => {
       },
       {
         id: 'project-remark',
-        plugins: ['remark-math', 'remark-directive', 'remark-about-directives', 'remark-callout']
+        plugins: ['remark-math', 'remark-directive', 'remark-about-directives', 'remark-callout', 'remark-content-directives', 'remark-mark']
       }
     ]);
     expect(publicConfig.processor.name).toBe('unified');
@@ -105,6 +109,15 @@ describe('markdown pipeline contract', () => {
         'rehype-katex'
       ]
     });
+    expect(publicSegmentIndex('project-rehype')).toBeLessThan(publicSegmentIndex('raw-html-local-images'));
+    expect(publicSegmentIndex('raw-html-local-images')).toBeLessThan(publicSegmentIndex('body-base-path'));
+    expect(publicSegmentIndex('body-base-path')).toBeLessThan(publicSegmentIndex('astro-images'));
+
+    const { options: processorOptions } = createPublicMarkdownConfig({ base: '/blog/' }).processor;
+    const publicImagePlugins = processorOptions.rehypePlugins.slice(-2);
+    expect(pluginOf(publicImagePlugins[0])).toBe(rehypeRawHtmlLocalImages);
+    expect(pluginOf(publicImagePlugins[1])).toBe(rehypeBasePath);
+    expect(optionsOf(publicImagePlugins[1])).toEqual({ base: '/blog/' });
   });
 
   it('declares preview GFM and smartypants before project remark plugins', () => {

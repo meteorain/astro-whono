@@ -7,23 +7,41 @@ The format is based on Keep a Changelog, and this project aims to follow Semanti
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-05
+
 ### Added
+- Markdown 新增 `==文本==` 高亮、`:spoiler[文本]` / `:::spoiler` 模糊（点击后显示）与 `:::details[标题]` 折叠内容；絮语支持高亮和模糊；模糊内容不进入摘要和搜索索引；编辑器新增高亮、模糊按钮，「折叠内容」改为插入 `:::details`。
+- 文章页正文底部新增标签与分享按钮（X、Facebook、邮件、分享卡片、复制链接）；分享卡片可生成带二维码的小海报并保存为图片；文章标签默认从标题下方移到这里，点击可进入标签页；Theme Console 可分别开关列表、标题下方和正文底部的标签（可同时显示）和上一篇/下一篇导航，并选择要显示的分享按钮（另可选微博、Telegram、LinkedIn）。
+- 文章页在宽屏（1440px 及以上）的正文右侧显示目录：H2/H3 自动编号，滚动时高亮当前章节；标题已自带编号的文章不重复编号。
+- Theme Console 新增「文章目录」开关：可关闭文章页右侧目录，默认开启。
 - Admin Console 支持将随笔、小记正文图片和絮语配图上传到 S3 兼容对象存储；Images Console 可浏览云端图片并复制 URL。未配置云存储时仍使用本地文件（[PR #38](https://github.com/cxro/astro-whono/pull/38)，by [@Nilbug](https://github.com/Nilbug)）。
 - 主题切换新增「跟随系统」模式：站点外观可随系统浅色/深色设置自动切换（[PR #35](https://github.com/cxro/astro-whono/pull/35)，by [@ZephyrCICD](https://github.com/ZephyrCICD)）。
 - Theme Console 新增「排版字体」配置：正文、文案、等宽、品牌四类字体可独立选择，支持系统字体栈与自托管字体（含构建期下载的中文子集），页面不请求任何第三方字体服务
 - Theme Console 新增「站点图标」配置：可上传正方形 PNG 自定义浏览器标签页图标与移动端触摸图标；文件以内容哈希命名写入 `public/images/site/`，替换后不受浏览器图标缓存影响，SVG 图标仍可通过替换 `public/favicon.svg` 自定义
 
 ### Changed
+- 文章页底部的上一篇/下一篇改为无边框箭头样式，悬停时箭头轻微平移；右侧目录悬停时文字轻微平移。
+- 文章标签默认从标题下方移到正文底部，`articleMeta.showTags` 改为只控制首页和文章列表；已开启标签的站点升级后标签位置会变化，如需恢复，可在 Theme Console 打开「文章标题下方显示标签」，并关闭「文章底部」的「显示标签」。
+- Theme Console 改版：设置按顶部标签分组显示，统一保存；表单样式统一。
 - 云端图片上传和列表遇到临时连接错误时会自动重试，等待过久时会结束请求；错误提示不再显示存储服务返回的原始内容。
 - 站点框架升级到 Astro 7，构建链同步升级到 Vite 8，并更新相关依赖修复多个上游安全公告；文章与页面的渲染效果保持不变。
 - 构建产物的响应式样式改用新的媒体查询语法，需要 Chrome 104+ / Safari 16.4+ / Firefox 102+（2022 年后的主流浏览器）才能完整生效。
 - 界面图标库 Lucide 随依赖升级更新，部分图标形状有细微视觉调整。
+- Node.js 最低版本提高到 22.23.4（Astro 7.4 起的要求）；Cloudflare Pages 等需手动指定版本的平台请同步更新 `NODE_VERSION`。
+- 依赖升级到 Astro 7.4、Vite 8.3、Vitest 4.1.12 与 KaTeX 0.18，修复依赖审计中的安全告警（含 Astro AVIF 图片处理远程代码执行）；fast-uri 固定到 3.1.9，并让间接依赖使用与项目一致的 KaTeX 版本。KaTeX 0.18 为部分内部 class 增加了 `katex-` 前缀，自定义样式若直接选择这些 class 需同步调整（[PR #65](https://github.com/cxro/astro-whono/pull/65)，by [@Puureastar](https://github.com/Puureastar)）。
 - 移除 `/admin/checks/` Checks Console：slug 与 settings 问题构建时会报错，无法生成归档路由的标签改为在本地后台保存时拦截，图片引用检查不再提供。
 
 ### Fixed
+- 修复文章分享时没有预览图的问题：默认分享图文件早已不存在，现改用新的 `og.png`。
+- 修复文章中通过后台「画廊」插入的本地图片在构建后的页面上无法显示的问题：画廊等原始 HTML `<img>` 中的相对路径图片现在与 Markdown 图片一样参与构建处理；引用的本地图片不存在时构建会报错（[#54](https://github.com/cxro/astro-whono/issues/54)）。
+- 修复子路径部署时，正文中以 `/` 开头的图片路径（如 `/images/...`，含手写 HTML 与 Markdown 图片）遗漏部署路径、图片无法显示的问题。
+- 修复子路径部署时，正文中以 `/` 开头的站内链接（如 `[指南](/archive/...)`）遗漏部署路径的问题。正文里以 `/` 开头的链接现在一律视为站内地址；如需链接到同域名下的其他应用，请使用完整网址（`https://...`）。
+- 修复在 UTC 以西时区（如美洲）运行本地后台时，批量下载内容文件因 zip 时间戳超出范围而失败的问题。
+- 修复图库详情中信息列较高时，图片预览超出所在列并遮挡右侧尺寸、文件路径等信息的问题（[PR #65](https://github.com/cxro/astro-whono/pull/65)，by [@Puureastar](https://github.com/Puureastar)）。
 - 修复本地后台编辑 figure 图片块时，含转义文本或富文本说明的图片可能被错误回显，以及本地图片缺失检查可能漏检的问题。
 - 修复子路径部署时，`/robots.txt` 中的 `Sitemap` 链接遗漏部署路径、指向错误地址的问题。
 - 修复依赖更新后 `package-lock.json` 重新写入第三方镜像地址的问题，默认安装不再依赖该镜像。
+- 修复窄窗口下主题切换按钮的提示撑出页面横向滚动的问题。
 
 
 ## [0.5.0] - 2026-06-16
@@ -283,7 +301,8 @@ node ".\export-astro-whono-settings.mjs" --include-legacy
 - 修复部分未使用样式与细节遗留问题。
 
 
-[Unreleased]: https://github.com/cxro/astro-whono/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/cxro/astro-whono/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/cxro/astro-whono/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/cxro/astro-whono/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/cxro/astro-whono/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/cxro/astro-whono/compare/v0.3.1...v0.4.0

@@ -15,6 +15,7 @@ import {
 import {
   ADMIN_ARTICLE_META_DATE_LABEL_DEFAULT,
   ADMIN_ARTICLE_META_DATE_LABEL_MAX_LENGTH,
+  ADMIN_ARTICLE_SHARE_PLATFORM_DEFAULT,
   ADMIN_HERO_IMAGE_ALT_DEFAULT,
   ADMIN_HERO_IMAGE_ALT_MAX_LENGTH,
   ADMIN_HOME_INTRO_LINK_DEFAULT,
@@ -46,6 +47,7 @@ import {
   isAdminSocialOrderValue,
   isAdminSidebarDividerVariant,
   normalizeAdminSocialIconKey,
+  normalizeArticleSharePlatforms,
 } from './admin-console/theme-shared';
 
 export type SettingSource = 'new' | 'legacy' | 'default';
@@ -58,6 +60,7 @@ export type SidebarDividerVariant = 'default' | 'subtle' | 'none';
 export type { ThemeFontId } from './fonts/registry';
 export type TypographyRole = 'readable' | 'copy' | 'mono' | 'brand';
 export type HomeIntroLinkKey = 'archive' | 'essay' | 'bits' | 'memo' | 'about' | 'tag';
+export type ArticleSharePlatformId = 'x' | 'facebook' | 'weibo' | 'telegram' | 'linkedin' | 'email' | 'poster' | 'copy';
 export type SiteSocialPresetId = 'github' | 'x' | 'email';
 export type SiteSocialKind = 'preset' | 'custom';
 export type SiteSocialIconKey =
@@ -197,11 +200,22 @@ export interface ArticleMetaSettings {
   showDate: boolean;
   dateLabel: string;
   showTags: boolean;
+  showHeaderTags: boolean;
   showWordCount: boolean;
   showReadingTime: boolean;
 }
 
 export type ArticleMetaDisplayContext = 'home' | 'list' | 'detail';
+
+export interface ArticleTocSettings {
+  showEntry: boolean;
+}
+
+export interface ArticleFooterSettings {
+  showTags: boolean;
+  showPrevNext: boolean;
+  sharePlatforms: ArticleSharePlatformId[];
+}
 
 export interface SidebarActionsSettings {
   showRssLink: boolean;
@@ -225,6 +239,8 @@ export interface UiSettings {
   };
   sidebarActions: SidebarActionsSettings;
   articleMeta: ArticleMetaSettings;
+  articleToc: ArticleTocSettings;
+  articleFooter: ArticleFooterSettings;
   layout: {
     sidebarDivider: SidebarDividerVariant;
   };
@@ -298,8 +314,13 @@ export interface ThemeSettingsSources {
     articleMetaShowDate: SettingSource;
     articleMetaDateLabel: SettingSource;
     articleMetaShowTags: SettingSource;
+    articleMetaShowHeaderTags: SettingSource;
     articleMetaShowWordCount: SettingSource;
     articleMetaShowReadingTime: SettingSource;
+    articleTocShowEntry: SettingSource;
+    articleFooterShowTags: SettingSource;
+    articleFooterShowPrevNext: SettingSource;
+    articleFooterSharePlatforms: SettingSource;
     layoutSidebarDivider: SettingSource;
     typographyReadable: SettingSource;
     typographyCopy: SettingSource;
@@ -552,8 +573,17 @@ const DEFAULT_UI: UiSettings = {
     showDate: true,
     dateLabel: ADMIN_ARTICLE_META_DATE_LABEL_DEFAULT,
     showTags: true,
+    showHeaderTags: false,
     showWordCount: true,
     showReadingTime: true
+  },
+  articleToc: {
+    showEntry: true
+  },
+  articleFooter: {
+    showTags: true,
+    showPrevNext: true,
+    sharePlatforms: [...ADMIN_ARTICLE_SHARE_PLATFORM_DEFAULT]
   },
   layout: {
     sidebarDivider: ADMIN_SIDEBAR_DIVIDER_DEFAULT
@@ -1383,6 +1413,8 @@ export const getThemeSettings = (): ThemeSettingsResolved => {
   const uiReadingMode = isRecord(uiJson?.readingMode) ? uiJson.readingMode : undefined;
   const uiSidebarActions = isRecord(uiJson?.sidebarActions) ? uiJson.sidebarActions : undefined;
   const uiArticleMeta = isRecord(uiJson?.articleMeta) ? uiJson.articleMeta : undefined;
+  const uiArticleToc = isRecord(uiJson?.articleToc) ? uiJson.articleToc : undefined;
+  const uiArticleFooter = isRecord(uiJson?.articleFooter) ? uiJson.articleFooter : undefined;
   const uiLayout = isRecord(uiJson?.layout) ? uiJson.layout : undefined;
   const uiTypography = isRecord(uiJson?.typography) ? uiJson.typography : undefined;
 
@@ -1426,6 +1458,11 @@ export const getThemeSettings = (): ThemeSettingsResolved => {
     undefined,
     DEFAULT_UI.articleMeta.showTags
   );
+  const showArticleHeaderTags = resolveValue(
+    asBoolean(uiArticleMeta?.showHeaderTags),
+    undefined,
+    DEFAULT_UI.articleMeta.showHeaderTags
+  );
   const showArticleWordCount = resolveValue(
     asBoolean(uiArticleMeta?.showWordCount),
     undefined,
@@ -1435,6 +1472,27 @@ export const getThemeSettings = (): ThemeSettingsResolved => {
     asBoolean(uiArticleMeta?.showReadingTime),
     undefined,
     DEFAULT_UI.articleMeta.showReadingTime
+  );
+  const showArticleToc = resolveValue(
+    asBoolean(uiArticleToc?.showEntry),
+    undefined,
+    DEFAULT_UI.articleToc.showEntry
+  );
+  // 旧配置只有 articleMeta.showTags：已关闭标签的站点升级后不应多出底部标签。
+  const showArticleFooterTags = resolveValue(
+    asBoolean(uiArticleFooter?.showTags),
+    asBoolean(uiArticleMeta?.showTags),
+    DEFAULT_UI.articleFooter.showTags
+  );
+  const showArticlePrevNext = resolveValue(
+    asBoolean(uiArticleFooter?.showPrevNext),
+    undefined,
+    DEFAULT_UI.articleFooter.showPrevNext
+  );
+  const articleSharePlatforms = resolveValue(
+    normalizeArticleSharePlatforms(uiArticleFooter?.sharePlatforms),
+    undefined,
+    DEFAULT_UI.articleFooter.sharePlatforms
   );
   const sidebarDivider = resolveValue(
     asSidebarDividerVariant(uiLayout?.sidebarDivider),
@@ -1569,8 +1627,17 @@ export const getThemeSettings = (): ThemeSettingsResolved => {
           showDate: showArticleDate.value,
           dateLabel: articleDateLabel.value,
           showTags: showArticleTags.value,
+          showHeaderTags: showArticleHeaderTags.value,
           showWordCount: showArticleWordCount.value,
           showReadingTime: showArticleReadingTime.value
+        },
+        articleToc: {
+          showEntry: showArticleToc.value
+        },
+        articleFooter: {
+          showTags: showArticleFooterTags.value,
+          showPrevNext: showArticlePrevNext.value,
+          sharePlatforms: [...articleSharePlatforms.value]
         },
         layout: {
           sidebarDivider: sidebarDivider.value
@@ -1642,8 +1709,13 @@ export const getThemeSettings = (): ThemeSettingsResolved => {
         articleMetaShowDate: showArticleDate.source,
         articleMetaDateLabel: articleDateLabel.source,
         articleMetaShowTags: showArticleTags.source,
+        articleMetaShowHeaderTags: showArticleHeaderTags.source,
         articleMetaShowWordCount: showArticleWordCount.source,
         articleMetaShowReadingTime: showArticleReadingTime.source,
+        articleTocShowEntry: showArticleToc.source,
+        articleFooterShowTags: showArticleFooterTags.source,
+        articleFooterShowPrevNext: showArticlePrevNext.source,
+        articleFooterSharePlatforms: articleSharePlatforms.source,
         layoutSidebarDivider: sidebarDivider.source,
         typographyReadable: typographyReadable.source,
         typographyCopy: typographyCopy.source,
@@ -1731,6 +1803,11 @@ const buildEditableThemeSettingsSnapshot = (
       readingMode: { ...resolved.settings.ui.readingMode },
       sidebarActions: { ...resolved.settings.ui.sidebarActions },
       articleMeta: { ...resolved.settings.ui.articleMeta },
+      articleToc: { ...resolved.settings.ui.articleToc },
+      articleFooter: {
+        ...resolved.settings.ui.articleFooter,
+        sharePlatforms: [...resolved.settings.ui.articleFooter.sharePlatforms]
+      },
       layout: { ...resolved.settings.ui.layout },
       typography: { ...resolved.settings.ui.typography }
     }

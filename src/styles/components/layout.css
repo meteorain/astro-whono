@@ -294,11 +294,78 @@
   border-bottom-color: var(--accent);
 }
 
+/* 文章底部：标签与分享 */
+.article-footer {
+  margin-top: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+}
+
+.article-footer__tags {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  font-family: var(--font-copy);
+  font-size: 14px;
+  color: var(--accent);
+}
+
+.article-footer__tags-icon {
+  flex: none;
+  margin-top: 5px;
+  color: var(--muted);
+}
+
+.article-footer__tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-width: 0;
+}
+
+.article-footer__tag {
+  color: inherit;
+  overflow-wrap: anywhere;
+  text-underline-offset: 3px;
+}
+
+a.article-footer__tag:hover {
+  text-decoration: underline;
+}
+
+/* 负外边距抵消按钮内留白，让图标与正文右缘对齐。 */
+.article-footer__share {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-left: auto;
+  margin-right: -9px;
+}
+
+.article-footer__share .icon-button .icon {
+  width: 16px;
+  height: 16px;
+}
+
+.article-footer__copy:not([data-state="copied"]) .article-footer__check-icon,
+.article-footer__copy[data-state="copied"] .article-footer__link-icon {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .article-footer__share {
+    margin-right: -14px;
+  }
+}
+
 /* 文章上下篇导航 */
 .prev-next {
-  margin-top: 28px;
+  margin-top: 40px;
   display: flex;
-  gap: 10px;
+  gap: 24px;
   flex-wrap: nowrap;
 }
 
@@ -311,44 +378,60 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  color: var(--text);
-  background: transparent;
-  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
-}
-
-.prev-next__link:hover {
-  color: var(--text);
-  border-color: var(--border);
-  background: var(--panel);
-}
-
-@supports (color: color-mix(in srgb, black 50%, white)) {
-  .prev-next__link:hover {
-    border-color: color-mix(in srgb, var(--border) 85%, var(--muted) 15%);
-  }
+  width: fit-content;
+  padding-block: 10px;
+  color: var(--muted);
+  transition: color 0.2s ease;
 }
 
 .prev-next__link--next {
-  text-align: right;
+  margin-left: auto;
   align-items: flex-end;
+  text-align: right;
 }
 
 .prev-next__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 12px;
   color: var(--faint);
+  transition: color 0.2s ease;
+}
+
+.prev-next__icon {
+  color: var(--muted);
+  transition: color 0.2s ease, transform 0.2s ease;
+}
+
+/* 抵消图标内留白，让箭头尖与标题边缘对齐。 */
+.prev-next__link--prev .prev-next__icon {
+  margin-left: -3px;
+}
+
+.prev-next__link--next .prev-next__icon {
+  margin-right: -3px;
 }
 
 .prev-next__title {
-  display: block;
   font-size: 13px;
-  color: var(--muted);
-  width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  text-wrap: balance;
+}
+
+.prev-next__link:is(:hover, :focus-visible),
+.prev-next__link:is(:hover, :focus-visible) :is(.prev-next__label, .prev-next__icon) {
+  color: var(--text);
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .prev-next__link--prev:hover .prev-next__icon {
+    transform: translateX(-4px);
+  }
+
+  .prev-next__link--next:hover .prev-next__icon {
+    transform: translateX(4px);
+  }
 }
 
 .prev-next__placeholder {
@@ -1086,6 +1169,29 @@ body.admin-page .sidebar-actions .icon-button[data-tooltip]::after {
 .sidebar-actions .icon-button[data-tooltip]:focus-visible::before {
   opacity: 1;
   transform: translate(-50%, 0);
+}
+
+/* 窄屏按钮贴近页面右上角：居中向上的提示会撑出横向滚动，顶部也会超出视口，改为按钮下方右对齐。 */
+@media (max-width: 900px) {
+  :where(body:not(.admin-page)) .sidebar-actions .icon-button[data-tooltip]::after {
+    top: calc(100% + 8px);
+    right: 0;
+    bottom: auto;
+    left: auto;
+    transform: translateY(-4px);
+  }
+
+  :where(body:not(.admin-page)) .sidebar-actions .icon-button[data-tooltip]::before {
+    top: 100%;
+    bottom: auto;
+    border-top-color: transparent;
+    border-bottom-color: var(--panel);
+    transform: translate(-50%, -2px);
+  }
+
+  :where(body:not(.admin-page)) .sidebar-actions .icon-button[data-tooltip]:is(:hover, :focus-visible)::after {
+    transform: none;
+  }
 }
 
 .icon-button:hover {

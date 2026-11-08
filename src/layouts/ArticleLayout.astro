@@ -1,17 +1,23 @@
 ---
+import type { MarkdownHeading } from 'astro';
+import { hasSiteUrl } from '../../site.config.mjs';
 import BaseLayout from './BaseLayout.astro';
+import BrandIcon from '../components/BrandIcon.astro';
 import UiIcon from '../components/UiIcon.astro';
 import Lightbox from '../components/Lightbox.astro';
 import '../styles/article.css';
-import { getEssayDerivedText, type EssayEntry } from '../lib/content';
+import { getArticleShareLinks } from '../lib/article-share';
+import { getArticleTocHeadings } from '../lib/article-toc';
+import { getEssayDerivedText, getEssaySlug, type EssayEntry } from '../lib/content';
 import { containsMarkdownMath } from '../lib/markdown-math';
 import {
   MARKDOWN_MATH_STYLESHEET_DATA_ATTR,
   MARKDOWN_MATH_STYLESHEET_HREF,
   MARKDOWN_MATH_STYLESHEET_ID
 } from '../lib/markdown-math-styles';
-import type { ArticleMetaSettings, SidebarNavId } from '../lib/theme-settings';
-import { formatISODateUtc } from '../utils/format';
+import type { ArticleFooterSettings, ArticleMetaSettings, SidebarNavId } from '../lib/theme-settings';
+import { createWithBase, formatISODateUtc } from '../utils/format';
+import ArticlePosterDialog from '../components/ArticlePosterDialog.astro';
 import { truncateText } from '../utils/excerpt';
 
 type ArticleNeighborLink = {
@@ -19,22 +25,37 @@ type ArticleNeighborLink = {
   title: string;
 };
 
+type ArticleTagLink = {
+  label: string;
+  href: string | null;
+};
+
 const {
   entry,
   prev,
   next,
   articleMetaSettings,
-  visibleTags = []
+  articleFooterSettings,
+  visibleTags = [],
+  tags = [],
+  poster,
+  headings = [],
+  showToc = true
 } = Astro.props as {
   entry: EssayEntry;
   prev: ArticleNeighborLink | null;
   next: ArticleNeighborLink | null;
   articleMetaSettings: ArticleMetaSettings;
+  articleFooterSettings: ArticleFooterSettings;
   visibleTags?: string[];
+  tags?: ArticleTagLink[];
+  poster: { siteName: string; authorName: string; authorAvatar: string };
+  headings?: MarkdownHeading[];
+  showToc?: boolean;
 };
 
 const entryTags: string[] = entry?.data?.tags ?? [];
-const defaultImage = '/og.svg';
+const defaultImage = createWithBase(import.meta.env.BASE_URL ?? '/')('/og.png');
 const coverImage = entry?.data?.cover ?? null;
 const ogImage = coverImage ?? defaultImage;
 const derivedText = getEssayDerivedText(entry);
@@ -56,10 +77,27 @@ const articleReadingStats = articleMetaSettings.showWordCount || articleMetaSett
     })()
   : { wordCount: 0, readingMinutes: 0 };
 const numberFormatter = new Intl.NumberFormat('zh-CN');
+const headerTags = articleMetaSettings.showHeaderTags ? visibleTags : [];
+const footerTags = articleFooterSettings.showTags ? tags : [];
 const shouldShowMetaLine = articleMetaSettings.showDate
-  || (articleMetaSettings.showTags && visibleTags.length > 0)
+  || headerTags.length > 0
   || articleMetaSettings.showWordCount
   || articleMetaSettings.showReadingTime;
+// 目录开关（ui.articleToc.showEntry）关闭时不生成目录数据，下游 DOM、网格与脚本随之不生效。
+const tocHeadings = showToc ? getArticleTocHeadings(headings) : [];
+const hasToc = tocHeadings.length > 0;
+// 一级编号达到两位数（"10."）时加宽编号列。
+const hasWideTocNumbers = tocHeadings.some((heading) => heading.level === 1 && (heading.number?.length ?? 0) > 2);
+// 分享平台需要完整地址；未设置 SITE_URL 的构建只保留分享卡片和复制链接，dev 用本地地址方便预览。
+const shareUrl = hasSiteUrl && Astro.site
+  ? new URL(Astro.url.pathname, Astro.site).toString()
+  : (import.meta.env.DEV ? Astro.url.href : null);
+const shareLinks = shareUrl
+  ? getArticleShareLinks(shareUrl, entry.data.title, articleFooterSettings.sharePlatforms)
+  : [];
+const showPoster = articleFooterSettings.sharePlatforms.includes('poster');
+const showCopyLink = articleFooterSettings.sharePlatforms.includes('copy');
+const hasShare = shareLinks.length > 0 || showPoster || showCopyLink;
 
 ---
 
@@ -86,56 +124,141 @@ const shouldShowMetaLine = articleMetaSettings.showDate
       />
     ) : null}
   </Fragment>
-  <div class="article-header reader-exit-anchor">
-    <h1 class="page-title">{entry.data.title}</h1>
-    <button
-      id="reader-exit"
-      class="icon-button reader-exit"
-      type="button"
-      aria-label="退出阅读"
-      title="退出阅读"
-      aria-hidden="true"
-      tabindex="-1"
-    >
-      <UiIcon name="reader-exit" class="icon" />
-    </button>
-    {shouldShowMetaLine ? (
-      <div class="meta-line meta-line--items">
-        {articleMetaSettings.showDate ? (
-          <span class="meta-line__item">
-            <time datetime={displayDate.toISOString()}>{`${displayDateLabel}${formatISODateUtc(displayDate)}`}</time>
-          </span>
-        ) : null}
-        {articleMetaSettings.showTags && visibleTags.length ? (
-          <span class="meta-line__item meta-line__item--tags">
-            {visibleTags.map((tag) => (
-              <span class="tag">#{tag}</span>
-            ))}
-          </span>
-        ) : null}
-        {articleMetaSettings.showWordCount ? (
-          <span class="meta-line__item meta-line__item--desktop-meta">
-            共 {numberFormatter.format(articleReadingStats.wordCount)} 字
-          </span>
-        ) : null}
-        {articleMetaSettings.showReadingTime ? (
-          <span class="meta-line__item meta-line__item--desktop-meta">
-            约 {numberFormatter.format(articleReadingStats.readingMinutes)} 分钟
-          </span>
-        ) : null}
-      </div>
-    ) : null}
-  </div>
+  <div class:list={['article-body', { 'article-body--toc': hasToc }]}>
+    <div class="article-header reader-exit-anchor">
+      <h1 class="page-title">{entry.data.title}</h1>
+      <button
+        id="reader-exit"
+        class="icon-button reader-exit"
+        type="button"
+        aria-label="退出阅读"
+        title="退出阅读"
+        aria-hidden="true"
+        tabindex="-1"
+      >
+        <UiIcon name="reader-exit" class="icon" />
+      </button>
+      {shouldShowMetaLine ? (
+        <div class="meta-line meta-line--items">
+          {articleMetaSettings.showDate ? (
+            <span class="meta-line__item">
+              <time datetime={displayDate.toISOString()}>{`${displayDateLabel}${formatISODateUtc(displayDate)}`}</time>
+            </span>
+          ) : null}
+          {headerTags.length ? (
+            <span class="meta-line__item meta-line__item--tags">
+              {headerTags.map((tag) => (
+                <span class="tag">#{tag}</span>
+              ))}
+            </span>
+          ) : null}
+          {articleMetaSettings.showWordCount ? (
+            <span class="meta-line__item meta-line__item--desktop-meta">
+              共 {numberFormatter.format(articleReadingStats.wordCount)} 字
+            </span>
+          ) : null}
+          {articleMetaSettings.showReadingTime ? (
+            <span class="meta-line__item meta-line__item--desktop-meta">
+              约 {numberFormatter.format(articleReadingStats.readingMinutes)} 分钟
+            </span>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
 
-  <div class="prose">
-    <slot />
+    {hasToc ? (
+      <nav class:list={['article-toc', { 'article-toc--wide-num': hasWideTocNumbers }]} aria-label="文章目录">
+        <p class="article-toc__title">
+          <span class="article-toc__label"><UiIcon name="toc" class="article-toc__icon" size={14} />On this page</span>
+        </p>
+        <ul class="article-toc__list">
+          {tocHeadings.map((heading) => (
+            <li>
+              <a
+                class="article-toc__link"
+                href={`#${heading.slug}`}
+                data-depth={heading.depth}
+                data-level={heading.level}
+              >
+                {heading.number ? <span class="article-toc__num" aria-hidden="true">{heading.number}</span> : null}
+                <span class="article-toc__text">{heading.text}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    ) : null}
+
+    <div class="prose">
+      <slot />
+    </div>
   </div>
-  {(prev || next) ? (
+  {footerTags.length > 0 || hasShare ? (
+    <div class="article-footer">
+      {footerTags.length ? (
+        <div class="article-footer__tags">
+          <UiIcon name="bookmark" class="article-footer__tags-icon" size={14} />
+          <div class="article-footer__tag-list">
+            {footerTags.map((tag) => tag.href ? (
+              <a class="article-footer__tag" href={tag.href}>#{tag.label}</a>
+            ) : (
+              <span class="article-footer__tag">#{tag.label}</span>
+            ))}
+          </div>
+        </div>
+      ) : null}
+      {hasShare ? (
+        <div class="article-footer__share" role="group" aria-label="分享文章">
+          {shareLinks.map((link) => (
+            <a
+              class="icon-button"
+              href={link.href}
+              aria-label={link.label}
+              title={link.label}
+              {...(link.id === 'email' ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
+            >
+              <BrandIcon name={link.id} class="icon" size={16} />
+            </a>
+          ))}
+          {showPoster ? (
+            <button
+              class="icon-button"
+              type="button"
+              aria-label="生成分享卡片"
+              aria-haspopup="dialog"
+              title="分享卡片"
+              data-article-poster-open
+              disabled
+            >
+              <UiIcon name="share-2" class="icon" size={16} />
+            </button>
+          ) : null}
+          {showCopyLink ? (
+            <button
+              class="icon-button article-footer__copy"
+              type="button"
+              aria-label="复制文章链接"
+              title="复制文章链接"
+              data-article-link-copy
+              disabled
+            >
+              <UiIcon name="link" class="icon article-footer__link-icon" size={16} />
+              <UiIcon name="check" class="icon article-footer__check-icon" size={16} />
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  ) : null}
+  {articleFooterSettings.showPrevNext && (prev || next) ? (
     <nav class="prev-next" aria-label="上一篇/下一篇">
       <div class="prev-next__item">
         {prev ? (
           <a class="prev-next__link prev-next__link--prev" href={prev.href} rel="prev">
-            <span class="prev-next__label">上一篇</span>
+            <span class="prev-next__label">
+              <UiIcon name="arrow-left" class="prev-next__icon" size={16} strokeWidth={1.5} />
+              上一篇
+            </span>
             <span class="prev-next__title">{prev.title}</span>
           </a>
         ) : (
@@ -145,7 +268,10 @@ const shouldShowMetaLine = articleMetaSettings.showDate
       <div class="prev-next__item">
         {next ? (
           <a class="prev-next__link prev-next__link--next" href={next.href} rel="next">
-            <span class="prev-next__label">下一篇</span>
+            <span class="prev-next__label">
+              下一篇
+              <UiIcon name="arrow-right" class="prev-next__icon" size={16} strokeWidth={1.5} />
+            </span>
             <span class="prev-next__title">{next.title}</span>
           </a>
         ) : (
@@ -163,10 +289,27 @@ const shouldShowMetaLine = articleMetaSettings.showDate
     enableSwipeDownClose={false}
   />
 
+  {showPoster ? (
+    <ArticlePosterDialog
+      siteName={poster.siteName}
+      title={entry.data.title}
+      date={articleMetaSettings.showDate ? formatISODateUtc(displayDate) : ''}
+      summary={description}
+      authorName={poster.authorName}
+      authorAvatar={poster.authorAvatar}
+      url={shareUrl}
+      fileName={`${getEssaySlug(entry)}.png`}
+    />
+  ) : null}
+
   <script>
-    import { initArticleLightbox, initCodeCopyButtons } from '../scripts/lightbox';
+    import { initArticleLightbox, initArticleLinkCopyButton, initCodeCopyButtons } from '../scripts/lightbox';
+    import { initArticlePoster } from '../scripts/article-poster';
+    import { initArticleToc } from '../scripts/article-toc';
 
     initCodeCopyButtons();
+    initArticleLinkCopyButton();
+    initArticlePoster();
     initArticleLightbox({
       dialogId: 'lightbox',
       containerSelector: '.prose',
@@ -174,5 +317,6 @@ const shouldShowMetaLine = articleMetaSettings.showDate
       enablePan: false,
       enableSwipeDownClose: false
     });
+    initArticleToc();
   </script>
 </BaseLayout>

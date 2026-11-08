@@ -1,9 +1,13 @@
 ---
 // 公开站点非品牌 UI 图标入口；只收录当前真实使用的项目语义名。
 import type { AstroComponent } from '@lucide/astro';
+import ArrowLeft from '@lucide/astro/icons/arrow-left';
+import ArrowRight from '@lucide/astro/icons/arrow-right';
 import Bold from '@lucide/astro/icons/bold';
 import Book from '@lucide/astro/icons/book';
 import BookOpen from '@lucide/astro/icons/book-open';
+import Bookmark from '@lucide/astro/icons/bookmark';
+import Check from '@lucide/astro/icons/check';
 import ChevronDown from '@lucide/astro/icons/chevron-down';
 import ChevronUp from '@lucide/astro/icons/chevron-up';
 import CircleUserRound from '@lucide/astro/icons/circle-user-round';
@@ -20,15 +24,21 @@ import Pilcrow from '@lucide/astro/icons/pilcrow';
 import Quote from '@lucide/astro/icons/quote';
 import Rss from '@lucide/astro/icons/rss';
 import Search from '@lucide/astro/icons/search';
+import Share2 from '@lucide/astro/icons/share-2';
 import SquareArrowRightExit from '@lucide/astro/icons/square-arrow-right-exit';
 import Sun from '@lucide/astro/icons/sun';
 import SunMoon from '@lucide/astro/icons/sun-moon';
 import Tag from '@lucide/astro/icons/tag';
+import TextAlignStart from '@lucide/astro/icons/text-align-start';
 
 type UiIconName =
+  | 'arrow-left'
+  | 'arrow-right'
   | 'bold'
   | 'book-closed'
   | 'book-open'
+  | 'bookmark'
+  | 'check'
   | 'chevron-down'
   | 'chevron-up'
   | 'code'
@@ -45,9 +55,11 @@ type UiIconName =
   | 'reader-exit'
   | 'rss'
   | 'search'
+  | 'share-2'
   | 'sun'
   | 'sun-moon'
   | 'tag'
+  | 'toc'
   | 'user-circle';
 
 interface Props {
@@ -67,9 +79,13 @@ const {
 } = Astro.props as Props;
 
 const uiIconComponents = {
+  'arrow-left': ArrowLeft,
+  'arrow-right': ArrowRight,
   bold: Bold,
   'book-closed': Book,
   'book-open': BookOpen,
+  bookmark: Bookmark,
+  check: Check,
   'chevron-down': ChevronDown,
   'chevron-up': ChevronUp,
   code: CodeXml,
@@ -86,9 +102,11 @@ const uiIconComponents = {
   'reader-exit': SquareArrowRightExit,
   rss: Rss,
   search: Search,
+  'share-2': Share2,
   sun: Sun,
   'sun-moon': SunMoon,
   tag: Tag,
+  toc: TextAlignStart,
   'user-circle': CircleUserRound
 } as const satisfies Record<UiIconName, AstroComponent>;
 

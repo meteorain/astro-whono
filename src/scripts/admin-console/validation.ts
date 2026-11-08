@@ -2,7 +2,10 @@ import type {
   SidebarNavId,
   SiteSocialPresetId
 } from '@/lib/theme-settings';
-import { validateAdminThemeSettings } from '@/lib/admin-console/theme-shared';
+import {
+  validateAdminThemeSettings,
+  type AdminThemeSettingsValidationIssue
+} from '@/lib/admin-console/theme-shared';
 import { type EditableSettings } from './form-codec';
 
 export type ValidationIssue = {
@@ -51,8 +54,13 @@ type ValidationContext = {
   inputArticleMetaShowDate: HTMLInputElement;
   inputArticleMetaDateLabel: HTMLInputElement;
   inputArticleMetaShowTags: HTMLInputElement;
+  inputArticleMetaShowHeaderTags: HTMLInputElement;
   inputArticleMetaShowWordCount: HTMLInputElement;
   inputArticleMetaShowReadingTime: HTMLInputElement;
+  inputArticleTocShowEntry: HTMLInputElement;
+  inputArticleFooterShowTags: HTMLInputElement;
+  inputArticleFooterShowPrevNext: HTMLInputElement;
+  articleSharePlatformInputs: HTMLInputElement[];
   inputSidebarActionsShowRssLink: HTMLInputElement;
   inputSidebarActionsShowThemeToggle: HTMLInputElement;
   inputSidebarActionsShowAdminEntry: HTMLInputElement;
@@ -119,8 +127,13 @@ export const createValidation = ({
   inputArticleMetaShowDate,
   inputArticleMetaDateLabel,
   inputArticleMetaShowTags,
+  inputArticleMetaShowHeaderTags,
   inputArticleMetaShowWordCount,
   inputArticleMetaShowReadingTime,
+  inputArticleTocShowEntry,
+  inputArticleFooterShowTags,
+  inputArticleFooterShowPrevNext,
+  articleSharePlatformInputs,
   inputSidebarActionsShowRssLink,
   inputSidebarActionsShowThemeToggle,
   inputSidebarActionsShowAdminEntry,
@@ -252,10 +265,20 @@ export const createValidation = ({
         return () => inputArticleMetaDateLabel;
       case 'ui.articleMeta.showTags':
         return () => inputArticleMetaShowTags;
+      case 'ui.articleMeta.showHeaderTags':
+        return () => inputArticleMetaShowHeaderTags;
       case 'ui.articleMeta.showWordCount':
         return () => inputArticleMetaShowWordCount;
       case 'ui.articleMeta.showReadingTime':
         return () => inputArticleMetaShowReadingTime;
+      case 'ui.articleToc.showEntry':
+        return () => inputArticleTocShowEntry;
+      case 'ui.articleFooter.showTags':
+        return () => inputArticleFooterShowTags;
+      case 'ui.articleFooter.showPrevNext':
+        return () => inputArticleFooterShowPrevNext;
+      case 'ui.articleFooter.sharePlatforms':
+        return () => articleSharePlatformInputs[0] ?? null;
       case 'ui.layout.sidebarDivider':
         return () => inputSidebarDividerDefault;
       case 'ui.typography.readable':
@@ -316,13 +339,15 @@ export const createValidation = ({
     return undefined;
   };
 
+  const createPathIssues = (issues: readonly AdminThemeSettingsValidationIssue[]): ValidationIssue[] =>
+    issues.map((issue) => createIssue(issue.message, resolveSharedIssueTarget(issue.path)));
+
   const validateSettings = (settings: EditableSettings): ValidationIssue[] =>
-    validateAdminThemeSettings(settings, { footerStartYearMax }).map((issue) =>
-      createIssue(issue.message, resolveSharedIssueTarget(issue.path))
-    );
+    createPathIssues(validateAdminThemeSettings(settings, { footerStartYearMax }));
 
   return {
     validateSettings,
+    createPathIssues,
     clearInvalidFields,
     markInvalidFields,
     resolveIssueField
