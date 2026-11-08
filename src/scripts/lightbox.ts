@@ -601,6 +601,26 @@ export const initAboutSiteInfoCopyButtons = () => {
   });
 };
 
+export const initArticleLinkCopyButton = () => {
+  const button = document.querySelector<HTMLButtonElement>('[data-article-link-copy]');
+  if (!button) return;
+
+  button.disabled = false;
+  button.addEventListener('click', async () => {
+    const copied = await copyTextToClipboard(`${location.origin}${location.pathname}`);
+    if (!copied) return;
+
+    button.dataset.state = 'copied';
+    button.setAttribute('aria-label', '已复制文章链接');
+    button.setAttribute('title', '已复制文章链接');
+    window.setTimeout(() => {
+      button.dataset.state = 'idle';
+      button.setAttribute('aria-label', '复制文章链接');
+      button.setAttribute('title', '复制文章链接');
+    }, 2000);
+  });
+};
+
 export const initBitsLightbox = (options: LightboxOptions = {}) => {
   const controller = createLightboxController({
     enableZoom: true,
@@ -736,7 +756,8 @@ export const initArticleLightbox = (options: ArticleLightboxOptions = {}) => {
   const images = Array.from(container.querySelectorAll<HTMLImageElement>('img'));
   images.forEach((img) => {
     if (img.dataset.lightbox === 'false') return;
-    if (img.closest('[data-no-lightbox]')) return;
+    // 模糊内容里的图片不进灯箱，否则左右切换会直接看到原图。
+    if (img.closest('[data-no-lightbox], .spoiler')) return;
     if (isTinyImage(img, minImageSize)) return;
 
     const link = img.closest<HTMLAnchorElement>('a[href]');

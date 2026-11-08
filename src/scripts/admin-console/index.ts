@@ -20,6 +20,7 @@ import { createAdminThemeController } from './controller';
 import { createAdminFaviconUploads } from './favicon-uploads';
 import { createFormCodec } from './form-codec';
 import { createAdminThemeImageFields } from './image-fields';
+import { createAdminSectionTabs } from './section-tabs';
 import { createSocialLinks } from './social-links';
 import { createAdminConsoleUiState } from './ui-state';
 import { createValidation } from './validation';
@@ -37,6 +38,7 @@ if (!root) {
     const endpoint = root.getAttribute('data-settings-endpoint') || ADMIN_SETTINGS_API_PATH;
     const footerStartYearMax = getAdminFooterStartYearMax();
     const getNavRows = (): HTMLElement[] => queryAll<HTMLElement>(root, '[data-nav-id]');
+    const articleSharePlatformInputs = queryAll<HTMLInputElement>(root, '[data-article-share-platform]');
 
     const socialLinks = createSocialLinks({
       query,
@@ -105,8 +107,13 @@ if (!root) {
       inputArticleMetaShowDate: controls.inputArticleMetaShowDate,
       inputArticleMetaDateLabel: controls.inputArticleMetaDateLabel,
       inputArticleMetaShowTags: controls.inputArticleMetaShowTags,
+      inputArticleMetaShowHeaderTags: controls.inputArticleMetaShowHeaderTags,
       inputArticleMetaShowWordCount: controls.inputArticleMetaShowWordCount,
       inputArticleMetaShowReadingTime: controls.inputArticleMetaShowReadingTime,
+      inputArticleTocShowEntry: controls.inputArticleTocShowEntry,
+      inputArticleFooterShowTags: controls.inputArticleFooterShowTags,
+      inputArticleFooterShowPrevNext: controls.inputArticleFooterShowPrevNext,
+      articleSharePlatformInputs,
       inputPageBitsAuthorName: controls.inputPageBitsAuthorName,
       inputPageBitsAuthorAvatar: controls.inputPageBitsAuthorAvatar,
       inputHomeShowHero: controls.inputHomeShowHero,
@@ -179,8 +186,13 @@ if (!root) {
       inputArticleMetaShowDate: controls.inputArticleMetaShowDate,
       inputArticleMetaDateLabel: controls.inputArticleMetaDateLabel,
       inputArticleMetaShowTags: controls.inputArticleMetaShowTags,
+      inputArticleMetaShowHeaderTags: controls.inputArticleMetaShowHeaderTags,
       inputArticleMetaShowWordCount: controls.inputArticleMetaShowWordCount,
       inputArticleMetaShowReadingTime: controls.inputArticleMetaShowReadingTime,
+      inputArticleTocShowEntry: controls.inputArticleTocShowEntry,
+      inputArticleFooterShowTags: controls.inputArticleFooterShowTags,
+      inputArticleFooterShowPrevNext: controls.inputArticleFooterShowPrevNext,
+      articleSharePlatformInputs,
       inputSidebarActionsShowRssLink: controls.inputSidebarActionsShowRssLink,
       inputSidebarActionsShowThemeToggle: controls.inputSidebarActionsShowThemeToggle,
       inputSidebarActionsShowAdminEntry: controls.inputSidebarActionsShowAdminEntry,
@@ -254,9 +266,12 @@ if (!root) {
       formCodec.syncSidebarActionControls();
       formCodec.syncHomeIntroLinkControls();
       formCodec.syncHeroControls();
-      formCodec.syncFooterYearControls();
       themeImageFields?.refresh('home.heroImageSrc');
+      faviconUploads.refreshAll();
+      socialLinks.updateCustomRowsUi();
     };
+
+    const sectionTabs = createAdminSectionTabs({ root, form: controls.form });
 
     const controller = createAdminThemeController({
       controls,
@@ -265,7 +280,8 @@ if (!root) {
       uiState,
       validation,
       finalizeAppliedSettings,
-      syncEditableDerivedControls
+      syncEditableDerivedControls,
+      revealField: sectionTabs.revealField
     });
 
     bindAdminThemeFieldEvents({

@@ -1,4 +1,5 @@
 import type {
+  ArticleSharePlatformId,
   HomeIntroLinkKey,
   SidebarDividerVariant,
   SidebarNavId,
@@ -13,6 +14,7 @@ import { normalizeHeroImageSrc as normalizeHeroImageSrcValue, normalizeSiteFavic
 import {
   ADMIN_ARTICLE_META_DATE_LABEL_DEFAULT,
   ADMIN_HERO_IMAGE_ALT_DEFAULT,
+  ADMIN_ARTICLE_SHARE_PLATFORM_DEFAULT,
   ADMIN_HOME_INTRO_LINK_DEFAULT,
   ADMIN_HOME_INTRO_LINK_LIMIT,
   ADMIN_HOME_INTRO_LINK_OPTIONS,
@@ -90,8 +92,13 @@ type FormCodecContext = {
   inputArticleMetaShowDate: HTMLInputElement;
   inputArticleMetaDateLabel: HTMLInputElement;
   inputArticleMetaShowTags: HTMLInputElement;
+  inputArticleMetaShowHeaderTags: HTMLInputElement;
   inputArticleMetaShowWordCount: HTMLInputElement;
   inputArticleMetaShowReadingTime: HTMLInputElement;
+  inputArticleTocShowEntry: HTMLInputElement;
+  inputArticleFooterShowTags: HTMLInputElement;
+  inputArticleFooterShowPrevNext: HTMLInputElement;
+  articleSharePlatformInputs: HTMLInputElement[];
   inputPageBitsAuthorName: HTMLInputElement;
   inputPageBitsAuthorAvatar: HTMLInputElement;
   inputHomeShowHero: HTMLInputElement;
@@ -210,8 +217,13 @@ export const createFormCodec = ({
   inputArticleMetaShowDate,
   inputArticleMetaDateLabel,
   inputArticleMetaShowTags,
+  inputArticleMetaShowHeaderTags,
   inputArticleMetaShowWordCount,
   inputArticleMetaShowReadingTime,
+  inputArticleTocShowEntry,
+  inputArticleFooterShowTags,
+  inputArticleFooterShowPrevNext,
+  articleSharePlatformInputs,
   inputPageBitsAuthorName,
   inputPageBitsAuthorAvatar,
   inputHomeShowHero,
@@ -327,7 +339,7 @@ export const createFormCodec = ({
       segments.push(`${dateLabel}${ARTICLE_META_PREVIEW_DATE}`);
     }
 
-    if (inputArticleMetaShowTags.checked) {
+    if (inputArticleMetaShowHeaderTags.checked) {
       segments.push(ARTICLE_META_PREVIEW_TAGS.join('\u00A0\u00A0'));
     }
 
@@ -415,17 +427,11 @@ export const createFormCodec = ({
       ? `${startYear}-${footerStartYearMax}`
       : String(startYear || footerStartYearMax);
     const copyright = inputSiteFooterCopyright.value.trim() || 'Whono · Theme Demo · by cxro';
-    return `页脚预览：© ${yearRange} ${copyright}`;
+    return `© ${yearRange} ${copyright}`;
   };
 
   const refreshFooterPreview = (): void => {
-    footerPreviewValueEl.textContent = getFooterPreviewText().replace(/^页脚预览：/, '').trim();
-  };
-
-  const syncFooterYearControls = (): void => {
-    const footerYearRangeEl = inputSiteFooterShowCurrentYear.closest<HTMLElement>('.admin-year-range');
-    if (!footerYearRangeEl) return;
-    footerYearRangeEl.dataset.currentYearEnabled = String(Boolean(inputSiteFooterShowCurrentYear.checked));
+    footerPreviewValueEl.textContent = getFooterPreviewText();
   };
 
   const canonicalize = (settings: unknown): EditableSettings =>
@@ -560,8 +566,19 @@ export const createFormCodec = ({
           showDate: Boolean(inputArticleMetaShowDate.checked),
           dateLabel: normalizeSingleLine(inputArticleMetaDateLabel.value),
           showTags: Boolean(inputArticleMetaShowTags.checked),
+          showHeaderTags: Boolean(inputArticleMetaShowHeaderTags.checked),
           showWordCount: Boolean(inputArticleMetaShowWordCount.checked),
           showReadingTime: Boolean(inputArticleMetaShowReadingTime.checked)
+        },
+        articleToc: {
+          showEntry: Boolean(inputArticleTocShowEntry.checked)
+        },
+        articleFooter: {
+          showTags: Boolean(inputArticleFooterShowTags.checked),
+          showPrevNext: Boolean(inputArticleFooterShowPrevNext.checked),
+          sharePlatforms: articleSharePlatformInputs
+            .filter((input) => input.checked)
+            .map((input) => input.value as ArticleSharePlatformId)
         },
         layout: {
           sidebarDivider: getSelectedSidebarDividerVariant()
@@ -634,7 +651,6 @@ export const createFormCodec = ({
     inputHeroImageSrc.value = settings.home.heroImageSrc || '';
     inputHeroImageAlt.value = settings.home.heroImageAlt || ADMIN_HERO_IMAGE_ALT_DEFAULT;
     syncHeroControls();
-    syncFooterYearControls();
     inputCodeLineNumbers.checked = Boolean(settings.ui?.codeBlock?.showLineNumbers);
     inputReadingEntry.checked = Boolean(settings.ui?.readingMode?.showEntry);
     inputSidebarActionsShowRssLink.checked = settings.ui?.sidebarActions?.showRssLink !== false;
@@ -644,8 +660,18 @@ export const createFormCodec = ({
     inputArticleMetaShowDate.checked = settings.ui?.articleMeta?.showDate !== false;
     inputArticleMetaDateLabel.value = settings.ui?.articleMeta?.dateLabel ?? ADMIN_ARTICLE_META_DATE_LABEL_DEFAULT;
     inputArticleMetaShowTags.checked = settings.ui?.articleMeta?.showTags !== false;
+    inputArticleMetaShowHeaderTags.checked = settings.ui?.articleMeta?.showHeaderTags === true;
     inputArticleMetaShowWordCount.checked = settings.ui?.articleMeta?.showWordCount !== false;
     inputArticleMetaShowReadingTime.checked = settings.ui?.articleMeta?.showReadingTime !== false;
+    inputArticleTocShowEntry.checked = settings.ui?.articleToc?.showEntry !== false;
+    inputArticleFooterShowTags.checked = settings.ui?.articleFooter?.showTags !== false;
+    inputArticleFooterShowPrevNext.checked = settings.ui?.articleFooter?.showPrevNext !== false;
+    const sharePlatforms = new Set<string>(
+      settings.ui?.articleFooter?.sharePlatforms ?? ADMIN_ARTICLE_SHARE_PLATFORM_DEFAULT
+    );
+    articleSharePlatformInputs.forEach((input) => {
+      input.checked = sharePlatforms.has(input.value);
+    });
     applySidebarDividerVariant(settings.ui?.layout?.sidebarDivider || ADMIN_SIDEBAR_DIVIDER_DEFAULT);
     applyTypographySettings(settings.ui?.typography);
     refreshFooterPreview();
@@ -678,7 +704,6 @@ export const createFormCodec = ({
     syncSidebarActionControls,
     syncHomeIntroLinkControls,
     syncHeroControls,
-    refreshFooterPreview,
-    syncFooterYearControls
+    refreshFooterPreview
   };
 };
